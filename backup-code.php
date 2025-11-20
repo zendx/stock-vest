@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: WSI — Single-file Investment Plugin
- * Description: Invite-only investment plugin — manual/auto deposits, withdrawals, reinvest, buy/sell stocks, admin management, two-level referrals (10% / 5%), daily/hourly accruals.
- * Version: 1.0.3
+ * Description: A Wordpress Plugin For Investment and stocks
+ * Version: 1.0.0
  * Author: HENRY SHEDRACK
  * Text Domain: wsi
  */
