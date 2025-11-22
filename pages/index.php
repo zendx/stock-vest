@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- dir="rtl"-->
+
+<head>
+    <!-- Required meta tags  -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+
+    <title>COFCO CAPITAL | User Dashboard</title>
+    <link rel="icon" type="image/png" href="assets/img/favicon.png">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com/">
+    <link rel="preconnect" href="https://fonts.gstatic.com/" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&amp;family=Open+Sans:ital,wght@0,300..800;1,300..800&amp;display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --adminuiux-content-font: "Open Sans", sans-serif;
+            --adminuiux-content-font-weight: 400;
+            --adminuiux-title-font: "Lexend", sans-serif;
+            --adminuiux-title-font-weight: 600;
+        }
+    </style>
+
+<script defer src="assets/js/app435e.js?1096aad991449c8654b2"></script><link href="assets/css/app435e.css?1096aad991449c8654b2" rel="stylesheet"></head>
+
+<body class="main-bg main-bg-opac main-bg-blur adminuiux-sidebar-fill-white adminuiux-sidebar-boxed  theme-blue roundedui" data-theme="theme-blue" data-sidebarfill="adminuiux-sidebar-fill-white" data-bs-spy="scroll" data-bs-target="#list-example" data-bs-smooth-scroll="true" tabindex="0">
+    <!-- Pageloader -->
+<?php
+    include_once "assets/inc/header.php"
+ ?>
+
+                    <main class="adminuiux-content has-sidebar" onclick="contentClick()">
+                        <!-- body content of pages -->
+
+                        <!-- Content  -->
+                        <div class="container mt-4" id="main-content">
+
+                            <!-- Welcome box -->
+                            <div class="row align-items-center">
+                                <div class="col-12 col-lg mb-4">
+                                    <h3 class="fw-normal mb-0 text-secondary">Welcome,</h3>
+                                    <h1>Investor</h1>
+                                </div>
+                            </div>
+                        <div class="container mt-4" id="main-content">
+                            <div class="row">
+                                <!-- balance -->
+                                <div class="col-12 col-md-6 col-lg-4 mb-4">
+                                    <div class="card adminuiux-card bg-theme-1">
+                                        <div class="card-body z-index-1">
+                                            <div class="row gx-2 align-items-center mb-4">
+                                                <div class="col-auto py-1">
+                                                    <div class="avatar avatar-60 bg-white-opacity rounded"><i class="bi bi-wallet h2"></i></div>
+                                                </div>
+                                            </div>
+                                            <h1>$25052.00</h1>
+                                            <h5 class="opacity-75 fw-normal mb-1">Total Assets</h5>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Total Assets -->
+                                <div class="col-12 col-md-6 col-lg-4">
+                                    <div class="row">
+                                        <div class="col-12 col-sm-6 col-md-12">
+                                            <div class="card adminuiux-card mb-4">
+                                                <div class="card-body z-index-1">
+                                                    <div class="row">
+                                                        <div class="col-auto">
+                                                            <div class="avatar avatar-60 bg-success-subtle text-success rounded"><i class="bi bi-graph-down-arrow h4"></i></div>
+                                                        </div>
+                                                        <div class="col">
+                                                            <h4 class="fw-medium">$5560.50</h4>
+                                                            <p class="text-secondary">Profit Income<span class="text-success fs-14"><i class="bi bi-arrow-up"></i> 11.5%</span></p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-12 col-sm-6 col-md-12">
+                                            <div class="card adminuiux-card mb-4">
+                                                <div class="card-body z-index-1">
+                                                    <div class="row">
+                                                        <div class="col-auto">
+                                                            <div class="avatar avatar-60 bg-danger-subtle text-danger rounded"><i class="bi bi-graph-up-arrow h4"></i></div>
+                                                        </div>
+                                                        <div class="col">
+                                                            <h4 class="fw-medium">$3586.15</h4>
+                                                            <p class="text-secondary">Available Balance <span class="text-success fs-14"><i class="bi bi-arrow-up"></i> 11.5%</span></p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- investment -->
+                                <div class="col-12 col-md-12 col-lg-4">
+                                    <div class="row">
+                                        <div class="col-12 col-sm-6 col-lg-12">
+                                            <div class="card adminuiux-card mb-4">
+                                                <div class="card-body z-index-1">
+                                                    <div class="row">
+                                                        <div class="col-auto">
+                                                            <div class="avatar avatar-60 bg-theme-1-subtle text-theme-1 rounded"><i class="bi bi-bank h4"></i></div>
+                                                        </div>
+                                                        <div class="col">
+                                                            <h4 class="fw-medium">$5560.50</h4>
+                                                            <p class="text-secondary">Total Assets <span class="text-success fs-14"><i class="bi bi-arrow-up"></i> 25.35%</span></p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-12 col-sm-6 col-lg-12">
+                                            <div class="card adminuiux-card mb-4">
+                                                <div class="card-body z-index-1">
+                                                    <div class="row">
+                                                        <div class="col-auto">
+                                                            <div class="avatar avatar-60 bg-theme-1-subtle text-theme-1 rounded"><i class="bi bi-cash-coin h4"></i></div>
+                                                        </div>
+                                                        <div class="col">
+                                                            <h4 class="fw-medium">$3586.15</h4>
+                                                            <p class="text-secondary">Net Margin <span class="text-success fs-14"><i class="bi bi-arrow-up"></i> 56.51%</span></p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- chart -->
+                                <div class="col-12 col-md-12 col-lg-8 mb-4">
+                                    <div class="card adminuiux-card">
+                                        <div class="card-header">
+                                            <div class="row align-items-center">
+                                                <div class="col">
+                                                    <h6>Cash Flow</h6>
+                                                </div>
+                                                <div class="col-auto px-0">
+                                                    <select class="form-select form-select-sm">
+                                                        <option>USD</option>
+                                                        <option>CAD</option>
+                                                        <option>AUD</option>
+                                                    </select>
+                                                </div>
+                                                <div class="col-auto">
+                                                    <button class="btn btn-sm btn-square btn-link"><i class="bi bi-arrow-clockwise"></i></button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="height-250 mb-3">
+                                                <canvas id="areachartblue1"></canvas>
+                                            </div>
+                                            <div class="row align-items-center">
+                                                <div class="col-6 col-md-4 col-lg-3">
+                                                    <div class="card adminuiux-card bg-theme-1">
+                                                        <div class="card-body z-index-1">
+                                                            <h4 class="fw-medium text">$5560.50</h4>
+                                                            <p class="opacity-75">Income <span class="fs-14"><i class="bi bi-arrow-up"></i> 11.5%</span></p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-6 col-md-4 col-lg-3">
+                                                    <div class="card adminuiux-card bg-theme-1-subtle">
+                                                        <div class="card-body z-index-1">
+                                                            <h4 class="fw-medium">$5560.50</h4>
+                                                            <p class="text-secondary">Expense <span class="text-success fs-14"><i class="bi bi-arrow-up"></i> 11.5%</span></p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- quick exchange -->
+                                <div class="col-12 col-md-6 col-lg-4">
+                                    <div class="card adminuiux-card">
+                                        <div class="card-header">
+                                            <div class="row align-items-center">
+                                                <div class="col">
+                                                    <h6>Quick Exchange</h6>
+                                                </div>
+                                                <div class="col-auto px-0">
+
+                                                </div>
+                                                <div class="col-auto">
+                                                    <span class="mx-1 text-secondary small">12s ago</span>
+                                                    <button class="btn btn-sm btn-square btn-link"><i class="bi bi-arrow-clockwise"></i></button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="card-body">
+                                            <input type="number" class="form-control form-control-lg text-center mb-4" id="ihave" placeholder="Convert Amount..." value="100.00">
+                                            <div class="row mb-3">
+                                                <div class="col">
+                                                    <div class="form-floating mb-1">
+                                                        <select class="form-select" id="ihavecurrency">
+                                                            <option>USD</option>
+                                                            <option>CAD</option>
+                                                            <option>AUD</option>
+                                                        </select>
+                                                        <label for="ihavecurrency">I have...</label>
+                                                    </div>
+                                                    <p class="small text-secondary text-center">1.00 USD</p>
+                                                </div>
+                                                <div class="col-auto">
+                                                    <button class="btn btn-square btn-theme mt-2"><i class="bi bi-arrow-left-right"></i></button>
+                                                </div>
+                                                <div class="col">
+                                                    <div class="form-floating mb-1">
+                                                        <select class="form-select" id="ihavecurrency2">
+                                                            <option>USD</option>
+                                                            <option selected>CAD</option>
+                                                            <option>AUD</option>
+                                                        </select>
+                                                        <label for="ihavecurrency2">I want...</label>
+                                                    </div>
+                                                    <p class="small text-secondary text-center">1.38 CAD</p>
+                                                </div>
+                                            </div>
+                                            <br>
+                                            <div class="text-center">
+                                                <h5 class="fw-normal"><b class="fw-bold">Great!</b> You will get</h5>
+                                                <h1 class="mb-0 text-theme-1">132.00</h1>
+                                                <p class="text-secondary small mb-4">in Canadian Dollar</p>
+                                                <button class="btn btn-outline-theme">Exchange now</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                    </main>
+
+            </div>
+
+            <!-- page footer -->
+            <?php
+            include_once "assets/inc/footer.php"
+             ?>
+
+                    <!-- Page Level js -->
+                    <script src="assets/js/investment/investment-dashboard.js"></script>
+
+                    </body>
+
+</html>

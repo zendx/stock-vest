@@ -1445,11 +1445,11 @@ function wsi_shortcode_dashboard() {
           
 <!-- WSI Deposit Success Modal (injected) -->
 <div id="wsi_deposit_modal" style="display:none;position:fixed;z-index:99999;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;">
-  <div role="dialog" aria-modal="true" aria-labelledby="wsi_modal_title" style="background:#fff;max-width:520px;width:90%;margin:auto;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,0.2);padding:20px;position:relative;">
-    <h2 id="wsi_modal_title" style="margin-top:0;font-size:20px;">Deposit Pending Approval</h2>
-    <div id="wsi_modal_body" style="margin-top:10px;font-size:14px;line-height:1.5"></div>
-    <div style="text-align:right;margin-top:18px;"><button id="wsi_modal_close" style="background:#0073aa;border:0;color:#fff;padding:8px 14px;border-radius:6px;cursor:pointer;">Close</button></div>
-  </div>
+<div role="dialog" aria-modal="true" aria-labelledby="wsi_modal_title" style="background:#fff;max-width:520px;width:90%;margin:auto;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,0.2);padding:20px;position:relative;">
+<h2 id="wsi_modal_title" style="margin-top:0;font-size:20px;">Deposit Pending Approval</h2>
+<div id="wsi_modal_body" style="margin-top:10px;font-size:14px;line-height:1.5"></div>
+<div style="text-align:right;margin-top:18px;"><button id="wsi_modal_close" style="background:#0073aa;border:0;color:#fff;padding:8px 14px;border-radius:6px;cursor:pointer;">Close</button></div>
+</div>
 </div>
 
 <script type="text/javascript">
