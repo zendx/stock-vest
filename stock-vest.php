@@ -593,6 +593,7 @@ function wsi_admin_deposits() {
 
             if ($action === 'approve') {
 
+                // Only update existing columns
                 $wpdb->update(
                     $t,
                     ['status' => 'approved'],
@@ -638,7 +639,6 @@ function wsi_admin_deposits() {
           <tr>
             <th>ID</th>
             <th>User</th>
-            <th>Email</th> <!-- ⭐ ADDED -->
             <th>Amount</th>
             <th>Method</th>
             <th>When</th>
@@ -653,7 +653,6 @@ function wsi_admin_deposits() {
           <tr>
             <td><?php echo intval($r->id); ?></td>
             <td><?php echo esc_html($u ? $u->user_login : 'User ' . $r->user_id); ?></td>
-            <td><?php echo esc_html($u ? $u->user_email : 'N/A'); ?></td> <!-- ⭐ ADDED -->
             <td>$<?php echo number_format($r->amount, 2); ?></td>
             <td><?php echo esc_html($r->method); ?></td>
             <td><?php echo esc_html($r->created_at); ?></td>
@@ -681,7 +680,6 @@ function wsi_admin_deposits() {
     </div>
     <?php
 }
-
 
 
 /* -------------------------------------------------------------------------
@@ -1126,49 +1124,7 @@ function wsi_admin_transactions() {
 /*-------------------------------------------------------------
     SMART FARMING ENGINE FUNCTION
 -------------------------------------------------------------*/
-function wsi_apply_smart_farming_interest() {
-    global $wpdb;
 
-    // Get admin-configured daily rate
-    $opts = wsi_get_opts();
-    $rate = floatval($opts['main_daily_percent'] ?? 0);
-
-    if ($rate <= 0) return;
-
-    // Fetch users who enabled Smart Farming
-    $users = $wpdb->get_results("
-        SELECT user_id
-        FROM {$wpdb->usermeta}
-        WHERE meta_key = 'wsi_smart_farming' AND meta_value = 'yes'
-    ");
-
-    if (!$users) return;
-
-    foreach ($users as $u) {
-        $uid = intval($u->user_id);
-
-        // ASSETS ONLY — your requirement
-        $assets = floatval(wsi_get_main($uid));
-
-        if ($assets <= 0) continue;
-
-        // Calculate interest
-        $interest = ($assets * $rate) / 100;
-
-        if ($interest <= 0) continue;
-
-        // Increase PROFIT balance (not main, not holdings)
-        wsi_inc_profit($uid, $interest);
-
-        // Log farming transaction
-        wsi_log_tx(
-            $uid,
-            $interest,
-            'smart_farm_interest',
-            'Smart Farming Daily Interest'
-        );
-    }
-}
 
 
 
@@ -2789,6 +2745,8 @@ function wsi_daily_accrue_fn() {
     foreach ($users as $u) {
         $uid = $u->ID;
         $main = wsi_get_main($uid);
+        $sf = get_user_meta($uid, 'wsi_smart_farming', true);
+        if ($sf !== 'yes') { continue; }
         if ($main > 0) {
             $interest = round($main * $percent, 2);
             if ($interest > 0) {

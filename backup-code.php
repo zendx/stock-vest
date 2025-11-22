@@ -51,23 +51,30 @@ register_deactivation_hook(WSI_FILE, 'wsi_deactivate');
 
 function wsi_activate() {
     wsi_create_tables();
-    // schedule hourly (for hourly stock accrual) and daily (for daily stock & main accrual)
+
+    // schedule hourly (for hourly stock accrual)
     if (!wp_next_scheduled('wsi_hourly_accrue')) {
         wp_schedule_event(time(), 'hourly', 'wsi_hourly_accrue');
     }
+
+    // schedule daily (for daily interest + holdings accrual)
     if (!wp_next_scheduled('wsi_daily_accrue')) {
         wp_schedule_event(time(), 'daily', 'wsi_daily_accrue');
     }
+
+    // create default options if missing
     if (get_option('wsi_options') === false) {
         update_option('wsi_options', [
             'main_daily_percent' => 2.29,
             'min_invest' => 50.00,
-            'deposit_mode' => 'manual', // manual or auto
+            'deposit_mode' => 'manual',
             'manual_payment_info' => "Bank: Example Bank\nAccount: 0123456789\nName: WSI Investments",
             'email_notifications' => 1
         ]);
     }
 }
+
+
 
 /*-- Repair Function--*/
 function wsi_fix_missing_deposit_columns() {
@@ -593,7 +600,6 @@ function wsi_admin_deposits() {
 
             if ($action === 'approve') {
 
-                // Only update existing columns
                 $wpdb->update(
                     $t,
                     ['status' => 'approved'],
@@ -639,6 +645,7 @@ function wsi_admin_deposits() {
           <tr>
             <th>ID</th>
             <th>User</th>
+            <th>Email</th> <!-- ⭐ ADDED -->
             <th>Amount</th>
             <th>Method</th>
             <th>When</th>
@@ -653,6 +660,7 @@ function wsi_admin_deposits() {
           <tr>
             <td><?php echo intval($r->id); ?></td>
             <td><?php echo esc_html($u ? $u->user_login : 'User ' . $r->user_id); ?></td>
+            <td><?php echo esc_html($u ? $u->user_email : 'N/A'); ?></td> <!-- ⭐ ADDED -->
             <td>$<?php echo number_format($r->amount, 2); ?></td>
             <td><?php echo esc_html($r->method); ?></td>
             <td><?php echo esc_html($r->created_at); ?></td>
@@ -680,6 +688,7 @@ function wsi_admin_deposits() {
     </div>
     <?php
 }
+
 
 
 /* -------------------------------------------------------------------------
@@ -1118,57 +1127,6 @@ function wsi_admin_transactions() {
 
     echo '</div>'; // wrap
 }
-
-
-
-/*-------------------------------------------------------------
-    SMART FARMING ENGINE FUNCTION
--------------------------------------------------------------*/
-function wsi_apply_smart_farming_interest() {
-    global $wpdb;
-
-    // Get admin-configured daily rate
-    $opts = wsi_get_opts();
-    $rate = floatval($opts['main_daily_percent'] ?? 0);
-
-    if ($rate <= 0) return;
-
-    // Fetch users who enabled Smart Farming
-    $users = $wpdb->get_results("
-        SELECT user_id
-        FROM {$wpdb->usermeta}
-        WHERE meta_key = 'wsi_smart_farming' AND meta_value = 'yes'
-    ");
-
-    if (!$users) return;
-
-    foreach ($users as $u) {
-        $uid = intval($u->user_id);
-
-        // ASSETS ONLY — your requirement
-        $assets = floatval(wsi_get_main($uid));
-
-        if ($assets <= 0) continue;
-
-        // Calculate interest
-        $interest = ($assets * $rate) / 100;
-
-        if ($interest <= 0) continue;
-
-        // Increase PROFIT balance (not main, not holdings)
-        wsi_inc_profit($uid, $interest);
-
-        // Log farming transaction
-        wsi_log_tx(
-            $uid,
-            $interest,
-            'smart_farm_interest',
-            'Smart Farming Daily Interest'
-        );
-    }
-}
-
-
 
 /* -------------------------------------------------------------------------
    ADMIN: Settings (was blank - fixed)
@@ -2781,33 +2739,55 @@ function wsi_hourly_accrue_fn() {
 add_action('wsi_daily_accrue', 'wsi_daily_accrue_fn');
 function wsi_daily_accrue_fn() {
     global $wpdb;
+
     $opts = wsi_get_opts();
     $percent = floatval($opts['main_daily_percent'] ?? 2.29) / 100.0;
-    $users = get_users(['fields' => 'ID']);
-    foreach ($users as $u) {
-        $uid = $u->ID;
+
+    // get all users who enabled Smart Farming
+    $users = $wpdb->get_col("
+        SELECT user_id 
+        FROM {$wpdb->usermeta}
+        WHERE meta_key='wsi_smart_farming' AND meta_value='yes'
+    ");
+
+    foreach ($users as $uid) {
+
+        // MAIN BALANCE INTEREST (controlled by Smart Farming switch)
         $main = wsi_get_main($uid);
         if ($main > 0) {
             $interest = round($main * $percent, 2);
             if ($interest > 0) {
                 wsi_inc_profit($uid, $interest);
-                wsi_log_tx($uid, $interest, 'daily_interest', "Daily interest applied");
+                wsi_log_tx($uid, $interest, 'daily_interest', "Daily interest applied (Smart Farming)");
             }
         }
     }
-    // holdings accrual for daily stocks
+
+    // HOLDINGS ACCRUAL (unchanged — NOT controlled by Smart Farming)
     $t_hold = $wpdb->prefix . 'wsi_holdings';
     $t_stocks = $wpdb->prefix . 'wsi_stocks';
-    $rows = $wpdb->get_results("SELECT h.*, s.rate_percent FROM $t_hold h JOIN $t_stocks s ON s.id=h.stock_id WHERE h.status='open' AND s.rate_period='daily' AND s.active=1");
+
+    $rows = $wpdb->get_results("
+        SELECT h.*, s.rate_percent 
+        FROM $t_hold h 
+        JOIN $t_stocks s ON s.id = h.stock_id 
+        WHERE h.status='open' AND s.rate_period='daily' AND s.active=1
+    ");
+
     foreach ($rows as $h) {
         $percent = floatval($h->rate_percent) / 100.0;
         $add = round(floatval($h->invested_amount) * $percent, 2);
         if ($add > 0) {
-            $wpdb->update($t_hold, ['accumulated_profit' => floatval($h->accumulated_profit) + $add], ['id' => $h->id]);
+            $wpdb->update(
+                $t_hold,
+                ['accumulated_profit' => floatval($h->accumulated_profit) + $add],
+                ['id' => $h->id]
+            );
             wsi_log_tx($h->user_id, $add, 'holding_daily_interest', "Holding #{$h->id} daily interest");
         }
     }
 }
+
 
 /* -------------------------------------------------------------------------
    Ensure invite code on login
