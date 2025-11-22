@@ -1129,7 +1129,7 @@ function wsi_admin_transactions() {
 }
 
 /* -------------------------------------------------------------------------
-   ADMIN: Settings (was blank - fixed)
+   ADMIN: Settings
 ------------------------------------------------------------------------- */
 function wsi_admin_settings() {
     if (!current_user_can('manage_options')) return;
