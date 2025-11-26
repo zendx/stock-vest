@@ -1,3 +1,7 @@
+<?php
+if (!defined('ABSPATH')) exit;
+
+?>
 <!DOCTYPE html>
 <html lang="en">
 <!-- dir="rtl"-->
@@ -24,7 +28,8 @@
         }
     </style>
 
-<script defer src="assets/js/app435e.js?1096aad991449c8654b2"></script><link href="assets/css/app435e.css?1096aad991449c8654b2" rel="stylesheet"></head>
+    <script defer src="<?php echo plugin_dir_url(__FILE__) . 'assets/js/app435e.js?1096aad991449c8654b2'; ?>"></script><link href="<?php echo plugin_dir_url(__FILE__) . 'assets/css/app435e.css?1096aad991449c8654b2'; ?>" rel="stylesheet">
+</head>
 
 <body class="main-bg main-bg-opac main-bg-blur adminuiux-sidebar-fill-white adminuiux-sidebar-boxed  theme-blue roundedui" data-theme="theme-blue" data-sidebarfill="adminuiux-sidebar-fill-white" data-bs-spy="scroll" data-bs-target="#list-example" data-bs-smooth-scroll="true" tabindex="0">
     <!-- Pageloader -->
@@ -79,9 +84,33 @@
                                 <div class="col-12 col-md-8 col-lg-6 col-xxl-5 mb-4">
                                     <p>Copy and Share your referral link with your network</p>
                                     <div class="input-group mb-3">
-                                        <input type="text" class="form-control form-control-lg border-theme-1" placeholder="Referral Code" aria-describedby="button-addon2" value="https://adminuiux.com/adminuiux50off" disabled>
-                                        <button class="btn btn-lg btn-outline-theme" type="button" id="button-addon2"><i class="bi bi-copy"></i></button>
+                                        <input 
+                                            type="text" 
+                                            class="form-control form-control-lg border-theme-1" 
+                                            id="referralLink"
+                                            placeholder="Referral Code"
+                                            aria-describedby="button-addon2" 
+                                            value="<?php echo esc_attr(wsi_get_invite_link()); ?>" 
+                                            readonly
+                                        >
+                                        <button class="btn btn-lg btn-outline-theme" type="button" id="copyReferral">
+                                            <i class="bi bi-copy"></i>
+                                        </button>
                                     </div>
+
+                                    <script>
+                                    document.getElementById('copyReferral').addEventListener('click', function () {
+                                        const input = document.getElementById('referralLink');
+                                        input.select();
+                                        input.setSelectionRange(0, 99999); // for mobile devices
+
+                                        navigator.clipboard.writeText(input.value).then(function () {
+                                            // Optional: give user feedback
+                                            alert("Referral link copied!");
+                                        });
+                                    });
+                                    </script>
+
                                 </div>
                                 <div class="col-12 py-2"></div>
                                 <!-- registration -->

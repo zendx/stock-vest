@@ -1,3 +1,8 @@
+<?php
+
+if (!defined('ABSPATH')) exit;
+
+?>
 <!DOCTYPE html>
 <html lang="en">
 <!-- dir="rtl"-->
@@ -24,7 +29,8 @@
         }
     </style>
 
-<script defer src="assets/js/app435e.js?1096aad991449c8654b2"></script><link href="assets/css/app435e.css?1096aad991449c8654b2" rel="stylesheet"></head>
+    <script defer src="<?php echo plugin_dir_url(__FILE__) . 'assets/js/app435e.js?1096aad991449c8654b2'; ?>"></script><link href="<?php echo plugin_dir_url(__FILE__) . 'assets/css/app435e.css?1096aad991449c8654b2'; ?>" rel="stylesheet">
+</head>
 
 <body class="main-bg main-bg-opac main-bg-blur adminuiux-sidebar-fill-white adminuiux-sidebar-boxed  theme-blue roundedui" data-theme="theme-blue" data-sidebarfill="adminuiux-sidebar-fill-white" data-bs-spy="scroll" data-bs-target="#list-example" data-bs-smooth-scroll="true" tabindex="0">
     <!-- Pageloader -->
@@ -64,105 +70,102 @@
                                 </nav>
                             </div-->
 
-                            <div class="row" id="list-item-1">
-
-                                <div class="col-12 ">
+                            <div class="row" id="list-item-withdraw">
+                                <div class="col-12">
                                     <div class="row">
+
                                         <div class="col-12 col-lg-8 mb-4">
-                                            <!-- create fixed deposit -->
+
                                             <div class="card adminuiux-card">
                                                 <div class="card-header">
-                                                    <h5>Create Deposit @ 7.00% </h5>
-                                                    <p class="text-secondary">Start your money growing with smart investment</p>
+                                                    <h5>Withdraw</h5>
+                                                    <p class="text-secondary">Withdraw funds to your crypto wallet</p>
                                                 </div>
+
                                                 <div class="card-body">
-                                                    <div class="row mb-2">
-                                                        <div class="col-12 col-md-6 col-xl-4 mb-3">
-                                                            <div class="form-floating">
-                                                                <input type="text" class="form-control" id="amount" placeholder="Amount" value="100">
-                                                                <label for="amount">Investment ($)</label>
+
+                                                    <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                                                        <input type="hidden" name="redirect_back" value="<?php echo esc_url( $_SERVER['REQUEST_URI'] ); ?>">
+                                                        <input type="hidden" name="action" value="wsi_submit_withdraw">
+                                                        <?php wp_nonce_field('wsi_withdraw_nonce'); ?>
+
+                                                        <div class="row mb-2">
+
+                                                            <!-- Amount -->
+                                                            <div class="col-12 col-md-6 col-xl-4 mb-3">
+                                                                <div class="form-floating">
+                                                                    <input name="amount" type="number" step="0.01" class="form-control" id="withdraw_amount" placeholder="Amount" required>
+                                                                    <label for="withdraw_amount">Amount ($)</label>
+                                                                </div>
+                                                            </div>
+
+                                                            <!-- Crypto Type -->
+                                                            <div class="col-12 col-md-6 col-xl-4 mb-3">
+                                                                <div class="form-floating">
+                                                                    <select name="crypto_type" class="form-select" id="withdraw_crypto_type" required>
+                                                                        <option value="">Select Network</option>
+                                                                        <option value="BTC">Bitcoin (BTC)</option>
+                                                                        <option value="ETH">Ethereum (ETH)</option>
+                                                                        <option value="USDT-TRC20">USDT (TRC20)</option>
+                                                                        <option value="USDT-ERC20">USDT (ERC20)</option>
+                                                                        <option value="BNB">BNB</option>
+                                                                        <option value="TRX">TRON (TRX)</option>
+                                                                    </select>
+                                                                    <label for="withdraw_crypto_type">Crypto Network</label>
+                                                                </div>
+                                                            </div>
+
+                                                            <!-- Wallet Address -->
+                                                            <div class="col-12 col-md-6 col-xl-4 mb-3">
+                                                                <div class="form-floating">
+                                                                    <input type="text" name="account_details" class="form-control" id="withdraw_wallet" placeholder="Wallet Address" required>
+                                                                    <label for="withdraw_wallet">Wallet Address</label>
+                                                                </div>
+                                                            </div>
+
+                                                        </div>
+
+                                                        <div class="row align-items-center">
+                                                            <div class="col">
+                                                                <p class="text-secondary small">Ensure your wallet address is correct before submitting</p>
+                                                            </div>
+                                                            <div class="col-auto">
+                                                                <button class="btn btn-theme" type="submit">Request Withdrawal</button>
                                                             </div>
                                                         </div>
-                                                        <div class="col-12 col-md-6 col-xl-4 mb-3">
-                                                            <div class="form-floating">
-                                                                <select class="form-select" id="typeinvestment">
-                                                                    <option>Fixed Deposit</option>
-                                                                    <option selected>Recurring Deposit</option>
-                                                                </select>
-                                                                <label for="typeinvestment">Type of Investment</label>
-                                                            </div>
-                                                        </div>
-                                                        <div class="col-12 col-md-6 col-xl-4 mb-3">
-                                                            <div class="form-floating">
-                                                                <select class="form-select" id="frequency1">
-                                                                    <option selected>Monthly</option>
-                                                                    <option>Quarterly</option>
-                                                                    <option>Yearly</option>
-                                                                </select>
-                                                                <label for="frequency1">Deposit Frequency</label>
-                                                            </div>
-                                                        </div>
-                                                        <div class="col-12 col-md-6 col-xl-4 mb-3">
-                                                            <div class="form-floating">
-                                                                <select class="form-select" id="depositday">
-                                                                    <option selected>1st</option>
-                                                                    <option>2nd</option>
-                                                                    <option>3rd</option>
-                                                                </select>
-                                                                <label for="depositday">Deposit on day</label>
-                                                            </div>
-                                                        </div>
-                                                        <div class="col-12 col-md-6 col-xl-4 mb-3">
-                                                            <div class="form-floating">
-                                                                <input type="text" class="form-control" id="duration" placeholder="Months" value="12">
-                                                                <label for="duration">Duration (months)</label>
-                                                            </div>
-                                                        </div>
-                                                        <div class="col-12 col-md-6 col-xl-4 mb-3">
-                                                            <div class="form-floating">
-                                                                <select class="form-select" id="maturity">
-                                                                    <option>Interest Monthly</option>
-                                                                    <option>Interest Quarterly</option>
-                                                                    <option>Interest Half Yearly</option>
-                                                                    <option>Interest Yearly</option>
-                                                                    <option selected>All on Maturity</option>
-                                                                </select>
-                                                                <label for="maturity">Withdraw</label>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    <div class="row align-items-center">
-                                                        <div class="col">
-                                                            <h5>$ 1246.50</h5>
-                                                            <p class="text-secondary small">Amount will be credited to wallet on maturity</p>
-                                                        </div>
-                                                        <div class="col-auto">
-                                                            <button class="btn btn-theme">Create Deposit</button>
-                                                        </div>
-                                                    </div>
+
+                                                    </form>
+
                                                 </div>
                                             </div>
+
                                         </div>
+
+                                        <!-- Right-side Offer Card (copied structure) -->
                                         <div class="col-12 col-lg-4 mb-4">
-                                            <!-- offer -->
                                             <div class="card adminuiux-card position-relative overflow-hidden bg-theme-1 h-100">
                                                 <div class="position-absolute top-0 start-0 h-100 w-100 z-index-0 coverimg opacity-50">
                                                     <img src="assets/img/modern-ai-image/flamingo-4.jpg" alt="">
                                                 </div>
                                                 <div class="card-body z-index-1">
                                                     <div class="avatar avatar-60 rounded bg-white-opacity text-white mb-4">
-                                                        <i class="bi bi-tags h4"></i>
+                                                        <i class="bi bi-cash-coin h4"></i>
                                                     </div>
-                                                    <h2>Great Offer!</h2>
-                                                    <h4 class="fw-medium">You have <b>LOAN</b> of <b>$ 800000.00</b> offer from HSBCD Bank</h4>
-                                                    <p class="mb-4">No documentation required...</p>
-                                                    <button class="btn btn-light my-1">Apply Now</button>
+
+                                                    <h2>Crypto Withdrawals</h2>
+                                                    <h4 class="fw-medium">Fast & secure blockchain withdrawals</h4>
+
+                                                    <p class="mb-4">Your request will be processed instantly for supported networks.</p>
+
+                                                    <button class="btn btn-light my-1">View Withdrawal History</button>
                                                 </div>
                                             </div>
                                         </div>
+
                                     </div>
                                 </div>
                             </div>
+
                         </div>
                     </main>
 

@@ -9,13 +9,7 @@
 
 if (!defined('ABSPATH')) exit;
 
-// === Global Output Clean Fix ===
-add_action('init', function() {
-    if (!headers_sent()) {
-        while (ob_get_level()) { ob_end_clean(); }
-        ob_start();
-    }
-});
+
 
 
 
@@ -51,23 +45,30 @@ register_deactivation_hook(WSI_FILE, 'wsi_deactivate');
 
 function wsi_activate() {
     wsi_create_tables();
-    // schedule hourly (for hourly stock accrual) and daily (for daily stock & main accrual)
+
+    // schedule hourly (for hourly stock accrual)
     if (!wp_next_scheduled('wsi_hourly_accrue')) {
         wp_schedule_event(time(), 'hourly', 'wsi_hourly_accrue');
     }
+
+    // schedule daily (for daily interest + holdings accrual)
     if (!wp_next_scheduled('wsi_daily_accrue')) {
         wp_schedule_event(time(), 'daily', 'wsi_daily_accrue');
     }
+
+    // create default options if missing
     if (get_option('wsi_options') === false) {
         update_option('wsi_options', [
             'main_daily_percent' => 2.29,
             'min_invest' => 50.00,
-            'deposit_mode' => 'manual', // manual or auto
+            'deposit_mode' => 'manual',
             'manual_payment_info' => "Bank: Example Bank\nAccount: 0123456789\nName: WSI Investments",
             'email_notifications' => 1
         ]);
     }
 }
+
+
 
 /*-- Repair Function--*/
 function wsi_fix_missing_deposit_columns() {
@@ -593,7 +594,6 @@ function wsi_admin_deposits() {
 
             if ($action === 'approve') {
 
-                // Only update existing columns
                 $wpdb->update(
                     $t,
                     ['status' => 'approved'],
@@ -639,6 +639,7 @@ function wsi_admin_deposits() {
           <tr>
             <th>ID</th>
             <th>User</th>
+            <th>Email</th> <!-- ⭐ ADDED -->
             <th>Amount</th>
             <th>Method</th>
             <th>When</th>
@@ -653,6 +654,7 @@ function wsi_admin_deposits() {
           <tr>
             <td><?php echo intval($r->id); ?></td>
             <td><?php echo esc_html($u ? $u->user_login : 'User ' . $r->user_id); ?></td>
+            <td><?php echo esc_html($u ? $u->user_email : 'N/A'); ?></td> <!-- ⭐ ADDED -->
             <td>$<?php echo number_format($r->amount, 2); ?></td>
             <td><?php echo esc_html($r->method); ?></td>
             <td><?php echo esc_html($r->created_at); ?></td>
@@ -680,6 +682,7 @@ function wsi_admin_deposits() {
     </div>
     <?php
 }
+
 
 
 /* -------------------------------------------------------------------------
@@ -1119,15 +1122,6 @@ function wsi_admin_transactions() {
     echo '</div>'; // wrap
 }
 
-
-
-/*-------------------------------------------------------------
-    SMART FARMING ENGINE FUNCTION
--------------------------------------------------------------*/
-
-
-
-
 /* -------------------------------------------------------------------------
    ADMIN: Settings
 ------------------------------------------------------------------------- */
@@ -1228,7 +1222,7 @@ function wsi_front_assets() {
 /* -------------------------------------------------------------------------
    SHORTCODE: registration (invite-only)
 ------------------------------------------------------------------------- */
-add_shortcode('wsi_register', 'wsi_shortcode_register');
+//add_shortcode('wsi_register', 'wsi_shortcode_register');
 function wsi_shortcode_register() {
     if (is_user_logged_in()) return '<div class="notice">Already logged in.</div>';
     $ref = $_GET['ref'] ?? ($_COOKIE['wsi_ref'] ?? '');
@@ -1294,7 +1288,7 @@ function wsi_shortcode_register() {
 /* -------------------------------------------------------------------------
    SHORTCODE: dashboard (tabs) - deposit, withdraw, reinvest, buy/sell, invite, transactions
 ------------------------------------------------------------------------- */
-add_shortcode('wsi_dashboard', 'wsi_shortcode_dashboard');
+//add_shortcode('wsi_dashboard', 'wsi_shortcode_dashboard');
 function wsi_shortcode_dashboard() {
     if (!is_user_logged_in()) return '<div class="notice">Please <a href="' . wp_login_url() . '">log in</a> to access your dashboard.</div>';
     $uid = get_current_user_id();
@@ -1445,11 +1439,11 @@ function wsi_shortcode_dashboard() {
           
 <!-- WSI Deposit Success Modal (injected) -->
 <div id="wsi_deposit_modal" style="display:none;position:fixed;z-index:99999;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;">
-<div role="dialog" aria-modal="true" aria-labelledby="wsi_modal_title" style="background:#fff;max-width:520px;width:90%;margin:auto;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,0.2);padding:20px;position:relative;">
-<h2 id="wsi_modal_title" style="margin-top:0;font-size:20px;">Deposit Pending Approval</h2>
-<div id="wsi_modal_body" style="margin-top:10px;font-size:14px;line-height:1.5"></div>
-<div style="text-align:right;margin-top:18px;"><button id="wsi_modal_close" style="background:#0073aa;border:0;color:#fff;padding:8px 14px;border-radius:6px;cursor:pointer;">Close</button></div>
-</div>
+  <div role="dialog" aria-modal="true" aria-labelledby="wsi_modal_title" style="background:#fff;max-width:520px;width:90%;margin:auto;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,0.2);padding:20px;position:relative;">
+    <h2 id="wsi_modal_title" style="margin-top:0;font-size:20px;">Deposit Pending Approval</h2>
+    <div id="wsi_modal_body" style="margin-top:10px;font-size:14px;line-height:1.5"></div>
+    <div style="text-align:right;margin-top:18px;"><button id="wsi_modal_close" style="background:#0073aa;border:0;color:#fff;padding:8px 14px;border-radius:6px;cursor:pointer;">Close</button></div>
+  </div>
 </div>
 
 <script type="text/javascript">
@@ -1816,14 +1810,19 @@ function wsi_shortcode_dashboard() {
         </div>
         <?php
 
+        // Replace your existing withdraw handler with this function in the plugin (stock-vest.php)
         add_action('admin_post_wsi_submit_withdraw', 'wsi_submit_withdraw');
         add_action('admin_post_nopriv_wsi_submit_withdraw', 'wsi_submit_withdraw');
 
         function wsi_submit_withdraw() {
-            if (!is_user_logged_in()) wp_die("Unauthorized request.");
+            if (!is_user_logged_in()) {
+                wp_send_json_error(['message' => 'Unauthorized'], 403);
+                wp_die();
+            }
 
             if (!isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'wsi_withdraw_nonce')) {
-                wp_die("Security verification failed.");
+                wp_send_json_error(['message' => 'Security verification failed.'], 403);
+                wp_die();
             }
 
             global $wpdb;
@@ -1831,38 +1830,33 @@ function wsi_shortcode_dashboard() {
             $t_dep = $wpdb->prefix . 'wsi_deposits';
             $t_wd  = $wpdb->prefix . 'wsi_withdrawals';
 
+            $is_ajax = (!empty($_POST['is_ajax']) && $_POST['is_ajax'] == '1');
             $amount = floatval($_POST['amount'] ?? 0);
             $wallet = sanitize_text_field($_POST['account_details'] ?? '');
             $crypto = sanitize_text_field($_POST['crypto_type'] ?? '');
+            $redirect_to = site_url('/wsi/withdrawal/');
 
             if ($amount <= 0) {
-                wsi_redirect_error("Invalid withdrawal amount.");
+                if ($is_ajax) wp_send_json_error(['message' => 'Invalid withdrawal amount.']);
+                wp_redirect(add_query_arg('withdraw_error', urlencode('Invalid amount'), $redirect_to));
+                exit;
             }
 
-            if (empty($wallet)) {
-                wsi_redirect_error("Wallet address is required.");
+            if (empty($wallet) || empty($crypto)) {
+                if ($is_ajax) wp_send_json_error(['message' => 'Wallet and crypto type are required.']);
+                wp_redirect(add_query_arg('withdraw_error', urlencode('Missing wallet or crypto type'), $redirect_to));
+                exit;
             }
 
-            if (empty($crypto)) {
-                wsi_redirect_error("Please select a crypto currency.");
-            }
-
-            /* -----------------------------------
-               1. Fetch Profit + Main Balance
-               ----------------------------------- */
+            // Fetch balances / compute unlocked assets (your existing logic)...
             $profit_income = floatval(wsi_get_profit($uid));
-            $main_balance  = floatval(wsi_get_main($uid));
-
-            /* -----------------------------------
-               2. Determine unlocked assets (older than 60 days)
-               ----------------------------------- */
+            // Determine unlocked deposits older than your threshold
             $deposits = $wpdb->get_results(
                 $wpdb->prepare("SELECT amount, created_at FROM $t_dep WHERE user_id=%d AND status='approved'", $uid)
             );
 
             $now = current_time('timestamp');
             $unlock_seconds = 60 * 24 * 60 * 60; // 60 days
-
             $unlocked_assets = 0;
 
             foreach ($deposits as $d) {
@@ -1871,22 +1865,16 @@ function wsi_shortcode_dashboard() {
                 }
             }
 
-            /* -----------------------------------
-               3. Available balance
-               ----------------------------------- */
             $available_balance = $profit_income + $unlocked_assets;
 
-            /* -----------------------------------
-               4. Check if allowed
-               ----------------------------------- */
             if ($amount > $available_balance) {
-                wsi_redirect_error("You can only withdraw up to your available balance.");
+                if ($is_ajax) wp_send_json_error(['message' => 'You can only withdraw up to your available balance.']);
+                wp_redirect(add_query_arg('withdraw_error', urlencode('Insufficient balance'), $redirect_to));
+                exit;
             }
 
-            /* -----------------------------------
-               5. Insert withdrawal request
-               ----------------------------------- */
-            $wpdb->insert(
+            // Insert withdrawal request
+            $inserted = $wpdb->insert(
                 $t_wd,
                 [
                     'user_id'        => $uid,
@@ -1899,37 +1887,40 @@ function wsi_shortcode_dashboard() {
                 ['%d','%f','%s','%s','%s','%s']
             );
 
-            /* -----------------------------------
-               6. Deduct the amount (FIXED)
-                 Deduct profit first → then unlocked deposits
-               ----------------------------------- */
+            if (!$inserted) {
+                if ($is_ajax) wp_send_json_error(['message' => 'Unable to create withdrawal. Try later.']);
+                wp_redirect(add_query_arg('withdraw_error', urlencode('DB error'), $redirect_to));
+                exit;
+            }
 
+            // Deduct from user balances
             $remaining = $amount;
-
-            // Deduct from profit first
             if ($profit_income > 0) {
                 $deduct_profit = min($profit_income, $remaining);
                 wsi_inc_profit($uid, -$deduct_profit);
                 $remaining -= $deduct_profit;
             }
-
-            // Deduct remainder from "main" balance (unlocked deposits)
             if ($remaining > 0) {
                 wsi_inc_main($uid, -$remaining);
             }
 
-            /* -----------------------------------
-               7. Redirect success
-               ----------------------------------- */
-            wp_redirect(home_url('/dashboard/?withdraw=success'));
-            exit;
-        }
+            $withdraw_id = (int) $wpdb->insert_id;
 
+            $payload = [
+                'withdraw_id' => $withdraw_id,
+                'amount' => number_format($amount,2,'.',''),
+                'payment_type' => $crypto,
+                'redirect_to' => $redirect_to,
+                'message' => 'Your withdrawal has been received and is pending approval.'
+            ];
 
-        // Helper for redirecting with an error message:
-        function wsi_redirect_error($msg) {
-            wp_redirect(home_url('/dashboard/?withdraw_error=' . urlencode($msg)));
-            exit;
+            if ($is_ajax) {
+                wp_send_json_success($payload);
+                wp_die();
+            } else {
+                wp_redirect(add_query_arg('withdraw', 'submitted', $redirect_to));
+                exit;
+            }
         }
         ?>
 
@@ -2247,77 +2238,81 @@ function wsi_toggle_smart_farming() {
     Deposit submit 
 --------------------------------------------------------------------------*/
 // ensure admin-post (non-AJAX) also handles the deposit action
-add_action('admin_post_wsi_submit_deposit', 'wsi_handle_deposit');
-add_action('admin_post_nopriv_wsi_submit_deposit', 'wsi_handle_deposit');
+// Replace your existing deposit handler with this function in the plugin (stock-vest.php)
+add_action('admin_post_wsi_submit_deposit', 'wsi_submit_deposit');
+add_action('admin_post_nopriv_wsi_submit_deposit', 'wsi_submit_deposit');
 
-// AJAX handlers
-add_action('wp_ajax_wsi_submit_deposit', 'wsi_handle_deposit');
-add_action('wp_ajax_nopriv_wsi_submit_deposit', 'wsi_handle_deposit');
+function wsi_submit_deposit() {
+    // Security + login
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'Unauthorized'], 403);
+        wp_die();
+    }
 
-if (!function_exists('wsi_handle_deposit')) {
-    function wsi_handle_deposit() {
-        global $wpdb;
+    if (!isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'wsi_deposit_nonce')) {
+        wp_send_json_error(['message' => 'Security verification failed.'], 403);
+        wp_die();
+    }
 
-        $table = $wpdb->prefix . 'wsi_deposits';
+    global $wpdb;
+    $uid = get_current_user_id();
+    $t_deposits = $wpdb->prefix . 'wsi_deposits';
 
-        /* SECURITY: NONCE CHECK */
-        if (!isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'wsi_deposit_nonce')) {
-            echo "ERROR:Security verification failed";
-            wp_die();
-        }
+    // read inputs (choose whichever inputs your form sends)
+    $is_ajax = (!empty($_POST['is_ajax']) && $_POST['is_ajax'] == '1');
+    $amount_usd = floatval($_POST['amount'] ?? $_POST['amount_usd'] ?? 0);
+    $payment_type = sanitize_text_field($_POST['payment_type'] ?? 'naira');
+    $amount_local = floatval($_POST['amount_naira'] ?? 0); // if present
+    $redirect_to = esc_url_raw($_POST['redirect_back'] ?? site_url('/wsi/withdrawal/'));
 
-        $user_id = get_current_user_id();
-        if (!$user_id) {
-            echo "ERROR:You must be logged in to deposit";
-            wp_die();
-        }
+    if ($amount_usd <= 0) {
+        if ($is_ajax) wp_send_json_error(['message' => 'Invalid amount.']);
+        wp_redirect(add_query_arg('deposit_error', urlencode('Invalid amount'), $redirect_to));
+        exit;
+    }
 
-        /* SANITIZED INPUTS */
-        $amount_usd   = floatval($_POST['amount'] ?? 0);
-        $amount_naira = floatval($_POST['amount_naira'] ?? 0);
-        // accept wallet passed as crypto_wallet (form) or wallet_id / wallet (fallbacks)
-        $wallet_id = '';
-        if (!empty($_POST['crypto_wallet'])) $wallet_id = sanitize_text_field($_POST['crypto_wallet']);
-        elseif (!empty($_POST['wallet_id'])) $wallet_id = sanitize_text_field($_POST['wallet_id']);
-        elseif (!empty($_POST['wallet'])) $wallet_id = sanitize_text_field($_POST['wallet']);
-
-        $payment_type = sanitize_text_field($_POST['payment_type'] ?? '');
-
-        if ($amount_usd <= 0) {
-            echo "ERROR:Invalid deposit amount";
-            wp_die();
-        }
-
-        /* INSERT INTO DB */
-        $wpdb->insert($table, [
-            'user_id'      => $user_id,
-            'amount'       => $amount_usd,
-            'amount_local' => $amount_naira,
+    // insert deposit request (adjust columns to match your DB)
+    $inserted = $wpdb->insert(
+        $t_deposits,
+        [
+            'user_id'    => $uid,
+            'amount'     => $amount_usd,
+            'amount_local' => $amount_local ?: null,
             'payment_type' => $payment_type,
-            'wallet'       => $wallet_id,
-            'method'       => $payment_type,
-            'status'       => 'pending',
-            'created_at'   => current_time('mysql'),
-        ]);
+            'status'     => 'pending',
+            'created_at' => current_time('mysql')
+        ],
+        ['%d','%f','%f','%s','%s','%s']
+    );
 
-        $id = $wpdb->insert_id;
+    if (!$inserted) {
+        if ($is_ajax) wp_send_json_error(['message' => 'Unable to create deposit. Try again later.']);
+        wp_redirect(add_query_arg('deposit_error', urlencode('DB error'), $redirect_to));
+        exit;
+    }
 
-        if (!$id) {
-            echo "ERROR:Failed to create deposit";
-            wp_die();
-        }
+    $deposit_id = (int) $wpdb->insert_id;
 
-        /* AJAX REQUEST → RETURN PLAIN TEXT */
-        if (!empty($_POST['is_ajax'])) {
-            echo "SUCCESS:$id|$amount_usd|$amount_naira|$payment_type|$wallet_id";
-            wp_die();
-        }
+    // Prepare response payload
+    $payload = [
+        'deposit_id' => $deposit_id,
+        'amount_usd' => number_format($amount_usd, 2, '.', ''),
+        'amount_local' => $amount_local ? number_format($amount_local, 2, '.', '') : '',
+        'payment_type' => $payment_type,
+        'redirect_to' => $redirect_to,
+        'message' => "Your deposit has been submitted and is pending approval."
+    ];
 
-        /* NON-AJAX FALLBACK */
-        wp_redirect(add_query_arg('deposit', 'success', wp_get_referer()));
+    if ($is_ajax) {
+        wp_send_json_success($payload);
+        wp_die();
+    } else {
+        // Not AJAX: redirect back; add success param if you want
+        wp_redirect(add_query_arg('deposit', 'success', $redirect_to));
         exit;
     }
 }
+
 
 
 /*--------------------------------------------------------------------------
@@ -2357,7 +2352,7 @@ function wsi_set_profit($uid, $amount) {
 function wsi_handle_withdraw() {
     if (!is_user_logged_in()) { wp_redirect(wp_login_url()); exit; }
 
-    $dash_url = wsi_get_dashboard_page_url();
+    $redirect_url = site_url('/wsi/withdrawal/');
 
     if (!wp_verify_nonce($_POST['_wpnonce'] ?? '', 'wsi_withdraw_nonce')) { 
         wsi_popup("Withdrawal Error!", $dash_url); 
@@ -2490,39 +2485,22 @@ function wsi_handle_withdraw() {
     wsi_audit($uid, 'withdraw_request', "Requested $amount");
     wsi_notify_admin('Withdrawal Requested', "User #{$uid} requested withdrawal of $" . number_format($amount, 2));
 
-    wsi_popup("Withdrawal Request Submitted", $dash_url);
+    wsi_popup("Withdrawal Request Submitted", $redirect_url);
     exit;
 }
 
 
 
-/*Helper to auto redirect to dashboard shortcodes called */
+/* Helper to redirect to the dashboard page */
 function wsi_get_dashboard_page_url() {
-    $pages = get_pages();
-
-    foreach ($pages as $p) {
-        if (has_shortcode($p->post_content, 'wsi_dashboard')) {
-            return get_permalink($p->ID);
-        }
-    }
-
-    // fallback if shortcode not found
-    return home_url('/');
+    return home_url('/wsi/dashboard/');
 }
 
-/*Helper to auto redirect to login form shortcodes called */
+/* Helper to redirect to the login page */
 function wsi_get_login_page_url() {
-    $pages = get_pages();
-
-    foreach ($pages as $p) {
-        if (has_shortcode($p->post_content, 'wsi_login_form')) {
-            return get_permalink($p->ID);
-        }
-    }
-
-    // fallback if shortcode not found
-    return home_url('/');
+    return home_url('/wsi/login/');
 }
+
 
 /* Popup Function Sitewide */
 function wsi_popup($message, $redirect = '') {
@@ -2739,35 +2717,55 @@ function wsi_hourly_accrue_fn() {
 add_action('wsi_daily_accrue', 'wsi_daily_accrue_fn');
 function wsi_daily_accrue_fn() {
     global $wpdb;
+
     $opts = wsi_get_opts();
     $percent = floatval($opts['main_daily_percent'] ?? 2.29) / 100.0;
-    $users = get_users(['fields' => 'ID']);
-    foreach ($users as $u) {
-        $uid = $u->ID;
+
+    // get all users who enabled Smart Farming
+    $users = $wpdb->get_col("
+        SELECT user_id 
+        FROM {$wpdb->usermeta}
+        WHERE meta_key='wsi_smart_farming' AND meta_value='yes'
+    ");
+
+    foreach ($users as $uid) {
+
+        // MAIN BALANCE INTEREST (controlled by Smart Farming switch)
         $main = wsi_get_main($uid);
-        $sf = get_user_meta($uid, 'wsi_smart_farming', true);
-        if ($sf !== 'yes') { continue; }
         if ($main > 0) {
             $interest = round($main * $percent, 2);
             if ($interest > 0) {
                 wsi_inc_profit($uid, $interest);
-                wsi_log_tx($uid, $interest, 'daily_interest', "Daily interest applied");
+                wsi_log_tx($uid, $interest, 'daily_interest', "Daily interest applied (Smart Farming)");
             }
         }
     }
-    // holdings accrual for daily stocks
+
+    // HOLDINGS ACCRUAL (unchanged — NOT controlled by Smart Farming)
     $t_hold = $wpdb->prefix . 'wsi_holdings';
     $t_stocks = $wpdb->prefix . 'wsi_stocks';
-    $rows = $wpdb->get_results("SELECT h.*, s.rate_percent FROM $t_hold h JOIN $t_stocks s ON s.id=h.stock_id WHERE h.status='open' AND s.rate_period='daily' AND s.active=1");
+
+    $rows = $wpdb->get_results("
+        SELECT h.*, s.rate_percent 
+        FROM $t_hold h 
+        JOIN $t_stocks s ON s.id = h.stock_id 
+        WHERE h.status='open' AND s.rate_period='daily' AND s.active=1
+    ");
+
     foreach ($rows as $h) {
         $percent = floatval($h->rate_percent) / 100.0;
         $add = round(floatval($h->invested_amount) * $percent, 2);
         if ($add > 0) {
-            $wpdb->update($t_hold, ['accumulated_profit' => floatval($h->accumulated_profit) + $add], ['id' => $h->id]);
+            $wpdb->update(
+                $t_hold,
+                ['accumulated_profit' => floatval($h->accumulated_profit) + $add],
+                ['id' => $h->id]
+            );
             wsi_log_tx($h->user_id, $add, 'holding_daily_interest', "Holding #{$h->id} daily interest");
         }
     }
 }
+
 
 /* -------------------------------------------------------------------------
    Ensure invite code on login
@@ -2779,7 +2777,7 @@ add_action('wp_login', function ($user_login, $user) {
 /* -------------------------------------------------------------------------
    Shortcode: transactions list (users see own, admin sees all)
 ------------------------------------------------------------------------- */
-add_shortcode('wsi_transactions', 'wsi_shortcode_transactions');
+//add_shortcode('wsi_transactions', 'wsi_shortcode_transactions');
 function wsi_shortcode_transactions() {
     if (!is_user_logged_in()) return '<div>Please login</div>';
     global $wpdb;
@@ -2833,158 +2831,150 @@ function wsi_inv_buy_stock() {
 
 
 /* -------------------------------------------------------
-   Custom Login & Dashboard Redirects
+   WSI LOGIN / LOGOUT / DASHBOARD REDIRECT SYSTEM
 ------------------------------------------------------- */
 
-// Redirect logged-in users to custom dashboard
-add_filter('login_redirect', function ($redirect_to, $request, $user) {
-    // Use your dynamic dashboard-page finder
-    $dashboard_url = wsi_get_dashboard_page_url();
+function wsi_dashboard_url() {
+    return function_exists('wsi_get_dashboard_page_url')
+        ? wsi_get_dashboard_page_url()
+        : home_url('/wsi/dashboard/');
+}
 
-    if (isset($user->roles) && is_array($user->roles)) {
-        return $dashboard_url;
+function wsi_login_url() {
+    return function_exists('wsi_get_login_page_url')
+        ? wsi_get_login_page_url()
+        : home_url('/wsi/login/');
+}
+
+/* ---------------------------------------------------------
+   Redirect logged-in users away from the login page to /wsi/dashboard
+--------------------------------------------------------- */
+add_action('template_redirect', function () {
+
+    // Get the current page URI (remove leading/trailing slashes)
+    $current = trim($_SERVER['REQUEST_URI'], '/');
+
+    // Check if the current page is 'wsi/login' and user is logged in
+    if ($current === '/wsi/login/' && is_user_logged_in()) {
+        
+        // Redirect to the custom dashboard page
+        wp_safe_redirect(home_url('/wsi/dashboard/'));
+        exit;
     }
-
-    return $redirect_to;
-}, 10, 3);
+});
 
 
-// Redirect logged-out users to custom login page
+
+/* -------------------------------------------------------
+   2. Redirect user after logout
+------------------------------------------------------- */
 add_action('wp_logout', function () {
-    if (function_exists('wsi_get_login_page_url')) {
-        $login_page = wsi_get_login_page_url();
-    } else {
-        $login_page = home_url('/'); // fallback (should never trigger)
-    }
-
-    wp_safe_redirect($login_page);
+    wp_safe_redirect(wsi_login_url());
     exit;
 });
 
-// Redirect non-logged-in users away from the dashboard
+
+/* -------------------------------------------------------
+   3. Control access to login / dashboard pages
+------------------------------------------------------- */
 add_action('template_redirect', function () {
-    if (is_page('dashboard') && !is_user_logged_in()) {
 
-        if (function_exists('wsi_get_login_page_url')) {
-            $login_page = wsi_get_login_page_url();
-        } else {
-            $login_page = home_url('/'); // fallback
-        }
+    $current = trim($_SERVER['REQUEST_URI'], '/');
+    $is_login     = ($current === 'wsi/login');
+    $is_dashboard = ($current === 'wsi/dashboard');
 
-        wp_safe_redirect($login_page);
+    /* ---- Logged-in user cannot see login page ---- */
+    if ($is_login && is_user_logged_in()) {
+        wp_safe_redirect(wsi_dashboard_url());
+        exit;
+    }
+
+    /* ---- Logged-out user cannot access dashboard ---- */
+    if ($is_dashboard && !is_user_logged_in()) {
+        wp_safe_redirect(wsi_login_url());
         exit;
     }
 });
 
 
-// Restrict access to registration page unless a valid invite link is used
+/* ---------------------------------------------------------
+   4. Registration access only via invite link
+--------------------------------------------------------- */
 add_action('template_redirect', function() {
-    if (!is_page()) return;
 
-    global $post;
-    if (has_shortcode($post->post_content ?? '', 'wsi_register')) {
-        $ref = sanitize_text_field($_GET['ref'] ?? '');
-        if (empty($ref)) {
-            wp_die(__('You need an invite link to access registration.', 'wsi'));
-        }
+    $current = trim($_SERVER['REQUEST_URI'], '/');
+    if ($current !== 'wsi/register') return;
 
-        global $wpdb;
-        // Validate using the correct meta key and case-insensitive match
-        $user_id = $wpdb->get_var($wpdb->prepare("
-            SELECT user_id FROM $wpdb->usermeta
-            WHERE meta_key = 'wsi_invite_code'
-            AND LOWER(meta_value) = LOWER(%s)
-            LIMIT 1
-        ", $ref));
-
-        if (!$user_id) {
-            wp_die(__('Invalid invite link.', 'wsi'));
-        }
-
-        // Optional: store referrer ID in session for later use
-        if (!session_id()) session_start();
-        $_SESSION['wsi_referrer_id'] = $user_id;
+    $ref = sanitize_text_field($_GET['ref'] ?? '');
+    if (empty($ref)) {
+        wp_die(__('You need an invite link to access registration.', 'wsi'));
     }
+
+    global $wpdb;
+    $user_id = $wpdb->get_var($wpdb->prepare("
+        SELECT user_id FROM $wpdb->usermeta
+        WHERE meta_key = 'wsi_invite_code'
+        AND LOWER(meta_value) = LOWER(%s)
+        LIMIT 1
+    ", $ref));
+
+    if (!$user_id) {
+        wp_die(__('Invalid invite link.', 'wsi'));
+    }
+
+    if (!session_id()) session_start();
+    $_SESSION['wsi_referrer_id'] = $user_id;
 });
 
 
-// Redirect logged-in users away from the login page
+/* ---------------------------------------------------------
+   5. Render login page directly at /wsi/login
+--------------------------------------------------------- */
 add_action('template_redirect', function () {
-    if (is_page('login') && is_user_logged_in()) {
 
-        // FIXED: use your dynamic dashboard page
-        $dashboard_url = wsi_get_dashboard_page_url();
+    // Normalize URL path (removes query strings)
+    $path = trim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), '/');
 
-        wp_safe_redirect($dashboard_url);
-        exit;
-    }
-});
+    if ($path === 'wsi/login') {
 
-// Custom Login Shortcode [wsi_login_form]
-add_shortcode('wsi_login_form', function () {
-    if (is_user_logged_in()) {
-
-        // FIXED: use your dynamic dashboard page
-        $dashboard_url = wsi_get_dashboard_page_url();
-
-        wp_safe_redirect($dashboard_url);
-        exit;
-    }
-
-    // FIXED: use dynamic dashboard page in redirect
-    $args = [
-        'redirect'        => wsi_get_dashboard_page_url(),
-        'form_id'         => 'wsi-loginform',
-        'label_username'  => __('Username or Email'),
-        'label_password'  => __('Password'),
-        'label_log_in'    => __('Login'),
-        'remember'        => true,
-    ];
-
-    ob_start();
-    echo '<div class="wsi-login-page">';
-    wp_login_form($args);
-    echo '</div>';
-    return ob_get_clean();
-});
-
-
-/* ---------------------------------------------------------------
-   KEEP LOGIN / REGISTER FAILURES ON THE SAME PAGE
------------------------------------------------------------------ */
-
-// Handle login from front-end form
-add_action('init', function() {
-    if (isset($_POST['wsi_login_nonce']) && wp_verify_nonce($_POST['wsi_login_nonce'], 'wsi_login_action')) {
-        $creds = [
-            'user_login'    => sanitize_text_field($_POST['log'] ?? ''),
-            'user_password' => sanitize_text_field($_POST['pwd'] ?? ''),
-            'remember'      => !empty($_POST['rememberme']),
-        ];
-
-        $user = wp_signon($creds, false);
-
-        if (is_wp_error($user)) {
-            // store error in transient and reload same page
-            set_transient('wsi_login_error', $user->get_error_message(), 30);
-            wp_safe_redirect($_SERVER['HTTP_REFERER']);
+        if (is_user_logged_in()) {
+            wp_safe_redirect(wsi_dashboard_url());
             exit;
         }
 
-        // redirect to dashboard (not wp-admin)
-        $dashboard = get_permalink(get_option('wsi_dashboard_page_id'));
-        wp_safe_redirect($dashboard ?: home_url('/'));
+        $args = [
+            'redirect'        => wsi_dashboard_url(),
+            'form_id'         => 'wsi-loginform',
+            'label_username'  => __('Username or Email'),
+            'label_password'  => __('Password'),
+            'label_log_in'    => __('Login'),
+            'remember'        => true,
+        ];
+
+        get_header();
+        echo '<div class="wsi-login-page">';
+        wp_login_form($args);
+        echo '</div>';
+        get_footer();
         exit;
     }
 });
 
-// Display login errors on the page
+
+
+/* -------------------------------------------------------
+   6. Stay on same page when login fails (front-end forms)
+------------------------------------------------------- */
+
+
+
 add_action('wp_footer', function() {
     if ($msg = get_transient('wsi_login_error')) {
         echo '<div class="wsi-alert wsi-error" style="color:red;margin:10px 0;">' . esc_html($msg) . '</div>';
         delete_transient('wsi_login_error');
     }
 });
+
 
 // Handle registration from front-end form
 add_action('init', function() {
@@ -3033,9 +3023,10 @@ add_action('init', function() {
         wp_set_current_user($user_id);
         wp_set_auth_cookie($user_id);
 
-        $dashboard = get_permalink(get_option('wsi_dashboard_page_id'));
-        wp_safe_redirect($dashboard ?: home_url('/'));
+        // ALWAYS redirect new users to /wsi/dashboard/
+        wp_safe_redirect(home_url('/wsi/dashboard/'));
         exit;
+
     }
 });
 
@@ -3178,3 +3169,29 @@ function wsi_get_user_transactions($user_id = 0, $limit = 100) {
     $sql = $wpdb->prepare("SELECT * FROM {$t} WHERE user_id=%d ORDER BY created_at DESC LIMIT %d", $user_id, intval($limit));
     return $wpdb->get_results($sql);
 }
+/* Add Routes ------------------------/
+-------------------------------------*/
+add_action('init', function () {
+    add_rewrite_rule(
+        '^wsi/([^/]*)/?',
+        'index.php?sv_page=$matches[1]',
+        'top'
+    );
+});
+
+add_filter('query_vars', function ($vars) {
+    $vars[] = 'sv_page';
+    return $vars;
+});
+
+add_action('template_redirect', function () {
+    $page = get_query_var('sv_page');
+
+    if ($page) {
+        $file = WP_PLUGIN_DIR . '/stock-vest/pages/' . $page . '.php';
+        if (file_exists($file)) {
+            require_once $file;
+            exit;
+        }
+    }
+});

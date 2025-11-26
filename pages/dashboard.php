@@ -1,7 +1,51 @@
+<?php
+if (!defined('ABSPATH')) exit;
+
+// Get current user
+$user_id = get_current_user_id();
+
+// --- USE THE CORRECT FUNCTIONS ---
+
+// Total assets
+$assets = wsi_get_main($user_id);
+
+// Profit income
+$profit_income = wsi_get_profit($user_id);
+
+// Net margin = assets + profit
+$net_margin = $assets + $profit_income;
+
+// Compute available balance (profit + unlocked deposits)
+global $wpdb;
+$t_dep = $wpdb->prefix . 'wsi_deposits';
+
+$deposits = $wpdb->get_results(
+    $wpdb->prepare("SELECT amount, created_at FROM $t_dep WHERE user_id=%d AND status='approved'", $user_id)
+);
+
+$now = current_time('timestamp');
+$unlock_seconds = 60 * 24 * 60 * 60; // 60 days
+
+$unlocked_assets = 0;
+foreach ($deposits as $d) {
+    if (($now - strtotime($d->created_at)) >= $unlock_seconds) {
+        $unlocked_assets += floatval($d->amount);
+    }
+}
+
+// Available balance = profit + unlocked deposits
+$available_balance = $profit_income + $unlocked_assets;
+
+// Format for display
+$assets = number_format($assets, 2);
+$profit_income = number_format($profit_income, 2);
+$net_margin = number_format($net_margin, 2);
+$available_balance = number_format($available_balance, 2);
+?>
+
 <!DOCTYPE html>
 <html lang="en">
 <!-- dir="rtl"-->
-
 <head>
     <!-- Required meta tags  -->
     <meta charset="utf-8">
@@ -24,13 +68,15 @@
         }
     </style>
 
-<script defer src="assets/js/app435e.js?1096aad991449c8654b2"></script><link href="assets/css/app435e.css?1096aad991449c8654b2" rel="stylesheet"></head>
+    <script defer src="<?php echo plugin_dir_url(__FILE__) . 'assets/js/app435e.js?1096aad991449c8654b2'; ?>"></script><link href="<?php echo plugin_dir_url(__FILE__) . 'assets/css/app435e.css?1096aad991449c8654b2'; ?>" rel="stylesheet">
+</head>
 
 <body class="main-bg main-bg-opac main-bg-blur adminuiux-sidebar-fill-white adminuiux-sidebar-boxed  theme-blue roundedui" data-theme="theme-blue" data-sidebarfill="adminuiux-sidebar-fill-white" data-bs-spy="scroll" data-bs-target="#list-example" data-bs-smooth-scroll="true" tabindex="0">
     <!-- Pageloader -->
-<?php
-    include_once "assets/inc/header.php"
- ?>
+    <?php
+    include_once plugin_dir_path(__FILE__) . 'assets/inc/header.php';
+    ?>
+
 
                     <main class="adminuiux-content has-sidebar" onclick="contentClick()">
                         <!-- body content of pages -->
@@ -42,7 +88,7 @@
                             <div class="row align-items-center">
                                 <div class="col-12 col-lg mb-4">
                                     <h3 class="fw-normal mb-0 text-secondary">Welcome,</h3>
-                                    <h1>Investor</h1>
+                                    <h1><?php echo esc_html(wp_get_current_user()->display_name); ?></h1>
                                 </div>
                             </div>
                         <div class="container mt-4" id="main-content">
@@ -56,7 +102,7 @@
                                                     <div class="avatar avatar-60 bg-white-opacity rounded"><i class="bi bi-wallet h2"></i></div>
                                                 </div>
                                             </div>
-                                            <h1>$25052.00</h1>
+                                            <h1>$<?php echo $assets; ?></h1>
                                             <h5 class="opacity-75 fw-normal mb-1">Total Assets</h5>
                                         </div>
                                     </div>
@@ -73,7 +119,7 @@
                                                             <div class="avatar avatar-60 bg-success-subtle text-success rounded"><i class="bi bi-graph-down-arrow h4"></i></div>
                                                         </div>
                                                         <div class="col">
-                                                            <h4 class="fw-medium">$5560.50</h4>
+                                                            <h4 class="fw-medium">$<?php echo $profit_income; ?></h4>
                                                             <p class="text-secondary">Profit Income<span class="text-success fs-14"><i class="bi bi-arrow-up"></i> 11.5%</span></p>
                                                         </div>
                                                     </div>
@@ -88,7 +134,7 @@
                                                             <div class="avatar avatar-60 bg-danger-subtle text-danger rounded"><i class="bi bi-graph-up-arrow h4"></i></div>
                                                         </div>
                                                         <div class="col">
-                                                            <h4 class="fw-medium">$3586.15</h4>
+                                                            <h4 class="fw-medium">$<?php echo $available_balance; ?></h4>
                                                             <p class="text-secondary">Available Balance <span class="text-success fs-14"><i class="bi bi-arrow-up"></i> 11.5%</span></p>
                                                         </div>
                                                     </div>
@@ -109,7 +155,7 @@
                                                             <div class="avatar avatar-60 bg-theme-1-subtle text-theme-1 rounded"><i class="bi bi-bank h4"></i></div>
                                                         </div>
                                                         <div class="col">
-                                                            <h4 class="fw-medium">$5560.50</h4>
+                                                            <h4 class="fw-medium">$<?php echo $assets; ?></h4>
                                                             <p class="text-secondary">Total Assets <span class="text-success fs-14"><i class="bi bi-arrow-up"></i> 25.35%</span></p>
                                                         </div>
                                                     </div>
@@ -124,7 +170,7 @@
                                                             <div class="avatar avatar-60 bg-theme-1-subtle text-theme-1 rounded"><i class="bi bi-cash-coin h4"></i></div>
                                                         </div>
                                                         <div class="col">
-                                                            <h4 class="fw-medium">$3586.15</h4>
+                                                            <h4 class="fw-medium">$<?php echo $net_margin; ?></h4>
                                                             <p class="text-secondary">Net Margin <span class="text-success fs-14"><i class="bi bi-arrow-up"></i> 56.51%</span></p>
                                                         </div>
                                                     </div>
@@ -181,7 +227,7 @@
                                 </div>
 
                                 <!-- quick exchange -->
-                                <div class="col-12 col-md-6 col-lg-4">
+                                <!--div class="col-12 col-md-6 col-lg-4">
                                     <div class="card adminuiux-card">
                                         <div class="card-header">
                                             <div class="row align-items-center">
@@ -235,17 +281,16 @@
                                             </div>
                                         </div>
                                     </div>
-                                </div>
+                                </div-->
                     </main>
 
             </div>
 
             <!-- page footer -->
             <?php
-            include_once "assets/inc/footer.php"
-             ?>
-
-                    <!-- Page Level js -->
+            include_once plugin_dir_path(__FILE__) . 'assets/inc/footer.php';
+            ?>
+                <!-- Page Level js -->
                     <script src="assets/js/investment/investment-dashboard.js"></script>
 
                     </body>
