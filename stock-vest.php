@@ -3,7 +3,7 @@
  * Plugin Name: WSI — Single-file Investment Plugin
  * Description: A Wordpress Plugin For Investment and stocks
  * Version: 1.0.0
- * Author: HENRY SHEDRACK
+ * Author: HAPPY GILMORE
  * Text Domain: wsi
  */
 
