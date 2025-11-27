@@ -1,5 +1,6 @@
 <?php
 if (!defined('ABSPATH')) exit;
+$wsi = plugins_url('assets/', __FILE__);
 
 
 $ref = $_GET['ref'] ?? ($_COOKIE['wsi_ref'] ?? '');

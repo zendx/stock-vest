@@ -465,112 +465,183 @@ function wsi_admin_dashboard() {
 ------------------------------------------------------------------------- */
 function wsi_admin_users() {
     if (!current_user_can('manage_options')) return;
-    global $wpdb;
 
+    // Handle admin actions
     if (!empty($_POST['action_user']) && check_admin_referer('wsi_users_nonce')) {
         $act = sanitize_text_field($_POST['action_user']);
         $uid = intval($_POST['user_id']);
+        $amt = isset($_POST['amount']) ? floatval($_POST['amount']) : 0;
 
-        if ($act === 'delete') {
-            require_once(ABSPATH . 'wp-admin/includes/user.php');
-            wp_delete_user($uid);
-            echo '<div class="notice notice-success"><p>User deleted</p></div>';
-            wsi_audit(get_current_user_id(), 'delete_user', "Deleted {$uid}");
-
-        } elseif ($act === 'suspend') {
-            update_user_meta($uid, 'wsi_suspended', 1);
-            echo '<div class="notice notice-success"><p>User suspended</p></div>';
-            wsi_audit(get_current_user_id(), 'suspend_user', "Suspended {$uid}");
-
-        } elseif ($act === 'unsuspend') {
-            delete_user_meta($uid, 'wsi_suspended');
-            echo '<div class="notice notice-success"><p>User unsuspended</p></div>';
-            wsi_audit(get_current_user_id(), 'unsuspend_user', "Unsuspended {$uid}");
-
-        } elseif ($act === 'credit') {
-            $amt = floatval($_POST['amount']);
-            wsi_inc_main($uid, $amt);
-            wsi_log_tx($uid, $amt, 'admin_credit', 'Admin credited');
-            echo '<div class="notice notice-success"><p>Credited $' . number_format($amt, 2) . '</p></div>';
-            wsi_audit(get_current_user_id(), 'credit_user', "Credited {$amt} to {$uid}");
-
-        } elseif ($act === 'debit') {  // <-- NEW
-            $amt = floatval($_POST['amount']);
-            wsi_inc_main($uid, -$amt); // deduct
-            wsi_log_tx($uid, $amt, 'admin_debit', 'Admin debited');
-            echo '<div class="notice notice-success"><p>Debited $' . number_format($amt, 2) . '</p></div>';
-            wsi_audit(get_current_user_id(), 'debit_user', "Debited {$amt} from {$uid}");
+        switch ($act) {
+            case 'delete':
+                require_once(ABSPATH . 'wp-admin/includes/user.php');
+                wp_delete_user($uid);
+                echo '<div class="notice notice-success"><p>User deleted</p></div>';
+                wsi_audit(get_current_user_id(), 'delete_user', "Deleted {$uid}");
+                break;
+            case 'suspend':
+                update_user_meta($uid, 'wsi_suspended', 1);
+                echo '<div class="notice notice-success"><p>User suspended</p></div>';
+                wsi_audit(get_current_user_id(), 'suspend_user', "Suspended {$uid}");
+                break;
+            case 'unsuspend':
+                delete_user_meta($uid, 'wsi_suspended');
+                echo '<div class="notice notice-success"><p>User unsuspended</p></div>';
+                wsi_audit(get_current_user_id(), 'unsuspend_user', "Unsuspended {$uid}");
+                break;
+            case 'credit':
+                wsi_inc_main($uid, $amt);
+                wsi_log_tx($uid, $amt, 'admin_credit', 'Admin credited');
+                echo '<div class="notice notice-success"><p>Credited $' . number_format($amt,2) . '</p></div>';
+                wsi_audit(get_current_user_id(), 'credit_user', "Credited {$amt} to {$uid}");
+                break;
+            case 'debit':
+                wsi_inc_main($uid, -$amt);
+                wsi_log_tx($uid, $amt, 'admin_debit', 'Admin debited');
+                echo '<div class="notice notice-success"><p>Debited $' . number_format($amt,2) . '</p></div>';
+                wsi_audit(get_current_user_id(), 'debit_user', "Debited {$amt} from {$uid}");
+                break;
         }
     }
 
     $users = get_users(['number' => 200, 'orderby' => 'ID', 'order' => 'DESC']);
     ?>
-    <div class="wrap"><h1>Users</h1>
-    <table class="widefat striped"><thead>
-        <tr>
-            <th>ID</th>
-            <th>Login</th>
-            <th>Email</th>
-            <th>Main</th>
-            <th>Profit</th>
-            <th>Inviter</th>
-            <th>Status</th>
-            <th>Actions</th>
-        </tr>
-    </thead><tbody>
-    <?php foreach ($users as $u) {
-        $main   = number_format(wsi_get_main($u->ID), 2);
-        $profit = number_format(wsi_get_profit($u->ID), 2);
-        $inv    = get_user_by('id', intval(get_user_meta($u->ID, 'wsi_inviter_id', true)));
-        $status = get_user_meta($u->ID, 'wsi_suspended', true) ? 'Suspended' : 'Active';
-        ?>
-      <tr>
-        <td><?php echo intval($u->ID); ?></td>
-        <td><?php echo esc_html($u->user_login); ?></td>
-        <td><?php echo esc_html($u->user_email); ?></td>
-        <td>$<?php echo $main; ?></td>
-        <td>$<?php echo $profit; ?></td>
-        <td><?php echo $inv ? esc_html($inv->user_login) : '—'; ?></td>
-        <td><?php echo esc_html($status); ?></td>
-        <td>
-          <form method="post" style="display:inline">
-              <?php wp_nonce_field('wsi_users_nonce'); ?>
-              <input type="hidden" name="user_id" value="<?php echo intval($u->ID); ?>">
-              <button name="action_user" value="delete" class="button" onclick="return confirm('Delete?')">Delete</button>
-          </form>
 
-          <form method="post" style="display:inline">
-              <?php wp_nonce_field('wsi_users_nonce'); ?>
-              <input type="hidden" name="user_id" value="<?php echo intval($u->ID); ?>">
-              <button name="action_user" value="suspend" class="button">Suspend</button>
-          </form>
+    <div class="wrap">
+        <h1>Users</h1>
+        <table class="widefat striped" id="wsi-users-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Login</th>
+                    <th>Email</th>
+                    <th>Main</th>
+                    <th>Profit</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                    <th>Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($users as $u) :
+                    $main   = number_format(wsi_get_main($u->ID), 2);
+                    $profit = number_format(wsi_get_profit($u->ID), 2);
+                    $status = get_user_meta($u->ID, 'wsi_suspended', true) ? 'Suspended' : 'Active';
 
-          <form method="post" style="display:inline">
-              <?php wp_nonce_field('wsi_users_nonce'); ?>
-              <input type="hidden" name="user_id" value="<?php echo intval($u->ID); ?>">
-              <button name="action_user" value="unsuspend" class="button">Unsuspend</button>
-          </form>
+                    // User meta
+                    $first_name = get_user_meta($u->ID, 'first_name', true);
+                    $last_name  = get_user_meta($u->ID, 'last_name', true);
+                    $phone      = get_user_meta($u->ID, 'phone', true);
+                    $birth      = get_user_meta($u->ID, 'birth_date', true);
+                    $addr1      = get_user_meta($u->ID, 'address1', true);
+                    $addr2      = get_user_meta($u->ID, 'address2', true);
+                    $landmark   = get_user_meta($u->ID, 'landmark', true);
+                    $street     = get_user_meta($u->ID, 'street', true);
+                    $country    = get_user_meta($u->ID, 'country', true);
+                    $zip        = get_user_meta($u->ID, 'zip', true);
+                    $state      = get_user_meta($u->ID, 'state', true);
+                    $city       = get_user_meta($u->ID, 'city', true);
+                ?>
+                <tr>
+                    <td><?php echo intval($u->ID); ?></td>
+                    <td><?php echo esc_html($u->user_login); ?></td>
+                    <td><?php echo esc_html($u->user_email); ?></td>
+                    <td>$<?php echo $main; ?></td>
+                    <td>$<?php echo $profit; ?></td>
+                    <td><?php echo esc_html($status); ?></td>
+                    <td>
+                        <!-- Admin actions -->
+                        <form method="post" style="display:inline"><?php wp_nonce_field('wsi_users_nonce'); ?>
+                            <input type="hidden" name="user_id" value="<?php echo intval($u->ID); ?>">
+                            <button name="action_user" value="delete" class="button" onclick="return confirm('Delete?')">Delete</button>
+                        </form>
+                        <form method="post" style="display:inline"><?php wp_nonce_field('wsi_users_nonce'); ?>
+                            <input type="hidden" name="user_id" value="<?php echo intval($u->ID); ?>">
+                            <button name="action_user" value="suspend" class="button">Suspend</button>
+                        </form>
+                        <form method="post" style="display:inline">
+                            <?php wp_nonce_field('wsi_users_nonce'); ?>
+                            <input type="hidden" name="user_id" value="<?php echo intval($u->ID); ?>">
+                            <input name="amount" type="number" step="0.01" placeholder="Amt">
+                            <button name="action_user" value="credit" class="button">Credit</button>
+                        </form>
+                        <form method="post" style="display:inline">
+                            <?php wp_nonce_field('wsi_users_nonce'); ?>
+                            <input type="hidden" name="user_id" value="<?php echo intval($u->ID); ?>">
+                            <input name="amount" type="number" step="0.01" placeholder="Amt">
+                            <button name="action_user" value="debit" class="button">Debit</button>
+                        </form>
+                    </td>
+                    <td>
+                        <button class="button toggle-details">Show Details</button>
+                    </td>
+                </tr>
 
-          <form method="post" style="display:inline;margin-left:6px">
-              <?php wp_nonce_field('wsi_users_nonce'); ?>
-              <input type="hidden" name="user_id" value="<?php echo intval($u->ID); ?>">
-              <input name="amount" type="number" step="0.01" placeholder="Amt">
-              <button name="action_user" value="credit" class="button">Credit</button>
-          </form>
+                <!-- Collapsible nested table -->
+                <tr class="user-details-row" style="display:none;">
+                    <td colspan="8">
+                        <table class="nested-user-table">
+                            <tr><th>First Name</th><td><?php echo esc_html($first_name); ?></td></tr>
+                            <tr><th>Last Name</th><td><?php echo esc_html($last_name); ?></td></tr>
+                            <tr><th>Phone</th><td><?php echo esc_html($phone); ?></td></tr>
+                            <tr><th>Birth Date</th><td><?php echo esc_html($birth); ?></td></tr>
+                            <tr><th>Address Line 1</th><td><?php echo esc_html($addr1); ?></td></tr>
+                            <tr><th>Address Line 2</th><td><?php echo esc_html($addr2); ?></td></tr>
+                            <tr><th>Landmark</th><td><?php echo esc_html($landmark); ?></td></tr>
+                            <tr><th>Street</th><td><?php echo esc_html($street); ?></td></tr>
+                            <tr><th>Country</th><td><?php echo esc_html($country); ?></td></tr>
+                            <tr><th>Zip</th><td><?php echo esc_html($zip); ?></td></tr>
+                            <tr><th>State</th><td><?php echo esc_html($state); ?></td></tr>
+                            <tr><th>City</th><td><?php echo esc_html($city); ?></td></tr>
+                        </table>
+                    </td>
+                </tr>
 
-          <!-- NEW DEBIT FORM -->
-          <form method="post" style="display:inline;margin-left:6px">
-              <?php wp_nonce_field('wsi_users_nonce'); ?>
-              <input type="hidden" name="user_id" value="<?php echo intval($u->ID); ?>">
-              <input name="amount" type="number" step="0.01" placeholder="Amt">
-              <button name="action_user" value="debit" class="button">Debit</button>
-          </form>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
 
-        </td>
-      </tr>
-    <?php } ?>
-    </tbody></table></div>
-    <?php
+    <style>
+        .nested-user-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 5px;
+        }
+        .nested-user-table th, .nested-user-table td {
+            border: 1px solid #ddd;
+            padding: 6px 10px;
+            text-align: left;
+        }
+        .nested-user-table th {
+            background-color: #f1f1f1;
+            width: 150px;
+        }
+        .user-details-row td {
+            padding: 0;
+            background-color: #fafafa;
+        }
+    </style>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const buttons = document.querySelectorAll('.toggle-details');
+            buttons.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const row = this.closest('tr').nextElementSibling;
+                    if (row.style.display === 'none') {
+                        row.style.display = 'table-row';
+                        this.textContent = 'Hide Details';
+                    } else {
+                        row.style.display = 'none';
+                        this.textContent = 'Show Details';
+                    }
+                });
+            });
+        });
+    </script>
+
+<?php
 }
 
 
@@ -593,13 +664,7 @@ function wsi_admin_deposits() {
         if ($dep) {
 
             if ($action === 'approve') {
-
-                $wpdb->update(
-                    $t,
-                    ['status' => 'approved'],
-                    ['id' => $id]
-                );
-
+                $wpdb->update($t, ['status' => 'approved'], ['id' => $id]);
                 wsi_inc_main($dep->user_id, floatval($dep->amount));
                 wsi_log_tx($dep->user_id, $dep->amount, 'deposit_approved', "Deposit #{$id} approved");
                 wsi_apply_referral($dep->user_id, floatval($dep->amount), $id);
@@ -607,13 +672,7 @@ function wsi_admin_deposits() {
                 wsi_audit(get_current_user_id(), 'approve_deposit', "Approved $id");
 
             } elseif ($action === 'decline') {
-
-                $wpdb->update(
-                    $t,
-                    ['status' => 'declined'],
-                    ['id' => $id]
-                );
-
+                $wpdb->update($t, ['status' => 'declined'], ['id' => $id]);
                 wsi_notify_user($dep->user_id, 'Deposit Declined', "Your deposit of $" . number_format($dep->amount, 2) . " was declined.");
                 wsi_audit(get_current_user_id(), 'decline_deposit', "Declined $id");
             }
@@ -623,63 +682,105 @@ function wsi_admin_deposits() {
     }
 
     // Get pending deposits
-    $rows = $wpdb->get_results("
-        SELECT * FROM $t 
-        WHERE TRIM(LOWER(status))='pending'
-        ORDER BY created_at DESC
-    ");
+    // Get pending deposits only
+    $rows = $wpdb->get_results("SELECT * FROM $t WHERE TRIM(LOWER(status))='pending' ORDER BY created_at DESC");
     ?>
 
-    <div class="wrap"><h1>Pending Deposits</h1>
+    <div class="wrap"><h1>Deposits</h1>
 
-    <?php if (empty($rows)) { echo '<p>No pending deposits.</p>'; } else { ?>
+    <?php if (empty($rows)) { echo '<p>No deposits found.</p>'; } else { ?>
 
       <table class="widefat striped">
         <thead>
           <tr>
             <th>ID</th>
             <th>User</th>
-            <th>Email</th> <!-- ⭐ ADDED -->
+            <th>Email</th>
             <th>Amount</th>
-            <th>Method</th>
-            <th>When</th>
+            <th>Payment Type</th>
+            <th>Wallet</th>
+            <th>Status</th>
+            <th>Created At</th>
             <th>Actions</th>
           </tr>
         </thead>
 
         <tbody>
-        <?php foreach ($rows as $r) { 
+        <?php foreach ($rows as $r) {
             $u = get_userdata($r->user_id);
         ?>
           <tr>
             <td><?php echo intval($r->id); ?></td>
             <td><?php echo esc_html($u ? $u->user_login : 'User ' . $r->user_id); ?></td>
-            <td><?php echo esc_html($u ? $u->user_email : 'N/A'); ?></td> <!-- ⭐ ADDED -->
+            <td><?php echo esc_html($u ? $u->user_email : 'N/A'); ?></td>
             <td>$<?php echo number_format($r->amount, 2); ?></td>
-            <td><?php echo esc_html($r->method); ?></td>
+            <td><?php echo esc_html(ucfirst($r->payment_type ?? 'Naira')); ?></td>
+            <td><?php echo esc_html($r->crypto_wallet ?? '—'); ?></td>
+            <td><?php echo esc_html(ucfirst($r->status)); ?></td>
             <td><?php echo esc_html($r->created_at); ?></td>
-
             <td>
               <form method="post" style="display:inline">
-                <?php wp_nonce_field('wsi_deposits_nonce'); ?>
-                <input type="hidden" name="deposit_id" value="<?php echo intval($r->id); ?>">
-                <button name="action_deposit" value="approve" class="button button-primary">Approve</button>
+                  <?php wp_nonce_field('wsi_deposits_nonce'); ?>
+                  <input type="hidden" name="deposit_id" value="<?php echo intval($r->id); ?>">
+                  <button name="action_deposit" value="approve" class="button button-primary">Approve</button>
               </form>
-
               <form method="post" style="display:inline">
-                <?php wp_nonce_field('wsi_deposits_nonce'); ?>
-                <input type="hidden" name="deposit_id" value="<?php echo intval($r->id); ?>">
-                <button name="action_deposit" value="decline" class="button">Decline</button>
+                  <?php wp_nonce_field('wsi_deposits_nonce'); ?>
+                  <input type="hidden" name="deposit_id" value="<?php echo intval($r->id); ?>">
+                  <button name="action_deposit" value="decline" class="button">Decline</button>
               </form>
+              <button class="button toggle-details" data-id="<?php echo intval($r->id); ?>">Details</button>
             </td>
           </tr>
+
+          <!-- Collapsible Details Row -->
+          <tr class="deposit-details" id="details-<?php echo intval($r->id); ?>" style="display:none; background:#f9f9f9;">
+            <td colspan="9">
+              <table style="width:100%; border-collapse: collapse;">
+                <tr>
+                  <td style="padding:5px; border-bottom:1px solid #ddd;"><strong>User ID:</strong> <?php echo intval($r->user_id); ?></td>
+                  <td style="padding:5px; border-bottom:1px solid #ddd;"><strong>Amount:</strong> $<?php echo number_format($r->amount,2); ?></td>
+                  <td style="padding:5px; border-bottom:1px solid #ddd;"><strong>Payment Type:</strong> <?php echo esc_html(ucfirst($r->payment_type ?? 'Naira')); ?></td>
+                  <td style="padding:5px; border-bottom:1px solid #ddd;"><strong>Wallet:</strong> <?php echo esc_html($r->crypto_wallet ?? '—'); ?></td>
+                </tr>
+                <tr>
+                  <td style="padding:5px; border-bottom:1px solid #ddd;"><strong>Status:</strong> <?php echo esc_html(ucfirst($r->status)); ?></td>
+                  <td style="padding:5px; border-bottom:1px solid #ddd;"><strong>Created At:</strong> <?php echo esc_html($r->created_at); ?></td>
+                  <td colspan="2" style="padding:5px; border-bottom:1px solid #ddd;"><strong>Notes:</strong> <?php echo esc_html($r->notes ?? '—'); ?></td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
         <?php } ?>
         </tbody>
       </table>
 
     <?php } ?>
-
     </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('.toggle-details').forEach(function(btn){
+            btn.addEventListener('click', function(){
+                var id = this.getAttribute('data-id');
+                var row = document.getElementById('details-' + id);
+                if(row.style.display === 'none'){
+                    row.style.display = 'table-row';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        });
+    });
+    </script>
+
+    <style>
+      .deposit-details td { background: #f4f4f4; }
+      .widefat td, .widefat th { padding: 8px; }
+      .widefat th { background: #f1f1f1; }
+    </style>
+
     <?php
 }
 
@@ -1127,7 +1228,11 @@ function wsi_admin_transactions() {
 ------------------------------------------------------------------------- */
 function wsi_admin_settings() {
     if (!current_user_can('manage_options')) return;
+
+    $opts = wsi_get_opts();
+
     if (!empty($_POST['wsi_save_settings']) && check_admin_referer('wsi_settings_nonce')) {
+
         $daily = floatval($_POST['main_daily_percent']);
         $min = floatval($_POST['min_invest']);
         $mode = sanitize_text_field($_POST['deposit_mode']);
@@ -1141,7 +1246,7 @@ function wsi_admin_settings() {
         wsi_update_opt('manual_payment_info', $manual);
         wsi_update_opt('email_notifications', $email);
         wsi_update_opt('exchange_rate', $exchange_rate);
-        
+
         $naira_info = sanitize_textarea_field($_POST['naira_payment_info'] ?? '');
         $btc_wallet = sanitize_text_field($_POST['btc_wallet'] ?? '');
         $btc_instruction = sanitize_textarea_field($_POST['btc_instruction'] ?? '');
@@ -1157,32 +1262,100 @@ function wsi_admin_settings() {
         wsi_update_opt('usdt_instruction', $usdt_instruction);
         wsi_update_opt('eth_wallet', $eth_wallet);
         wsi_update_opt('eth_instruction', $eth_instruction);
-echo '<div class="notice notice-success"><p>Settings saved.</p></div>';
+
+        // NEW EMAIL TEMPLATES
+        wsi_update_opt('email_deposit_received', sanitize_textarea_field($_POST['email_deposit_received']));
+        wsi_update_opt('email_deposit_approved', sanitize_textarea_field($_POST['email_deposit_approved']));
+        wsi_update_opt('email_withdraw_received', sanitize_textarea_field($_POST['email_withdraw_received']));
+        wsi_update_opt('email_withdraw_approved', sanitize_textarea_field($_POST['email_withdraw_approved']));
+        wsi_update_opt('email_withdraw_declined', sanitize_textarea_field($_POST['email_withdraw_declined']));
+        wsi_update_opt('email_registration_welcome', sanitize_textarea_field($_POST['email_registration_welcome']));
+
+        echo '<div class="notice notice-success"><p>Settings saved.</p></div>';
     }
+
     $opts = wsi_get_opts();
     ?>
     <div class="wrap"><h1>WSI Settings</h1>
     <form method="post"><?php wp_nonce_field('wsi_settings_nonce'); ?>
       <table class="form-table">
-        <tr><th>Main balance daily interest (%)</th><td><input name="main_daily_percent" type="number" step="0.001" value="<?php echo esc_attr($opts['main_daily_percent'] ?? 2.29); ?>"></td></tr>
-        <tr><th>Minimum investment $</th><td><input name="min_invest" type="number" step="0.01" value="<?php echo esc_attr($opts['min_invest'] ?? 50); ?>"></td></tr>
-        <tr><th>Exchange rate ($ per $1)</th><td><input name="exchange_rate" type="number" step="0.01" value="<?php echo esc_attr($opts['exchange_rate'] ?? 1000); ?>"> <small>How many Naira equals $1</small></td></tr>
-        <tr><th>Deposit mode</th><td><select name="deposit_mode"><option value="manual" <?php selected(($opts['deposit_mode'] ?? 'manual'), 'manual'); ?>>Naira Payment</option><option value="auto" <?php selected(($opts['deposit_mode'] ?? 'manual'), 'auto'); ?>>Crypto Payment</option></select></td></tr>
-        <tr><th>Manual payment info</th><td><textarea name="manual_payment_info" rows="4"><?php echo esc_textarea($opts['manual_payment_info'] ?? ''); ?></textarea></td></tr>
-        <tr><th>Naira payment instructions</th><td><textarea name="naira_payment_info" rows="4"><?php echo esc_textarea($opts['naira_payment_info'] ?? ''); ?></textarea></td></tr>
-        <tr><th>BTC Wallet Address</th><td><input name="btc_wallet" value="<?php echo esc_attr($opts['btc_wallet'] ?? ''); ?>" style="width:100%"></td></tr>
-        <tr><th>BTC Payment Instruction</th><td><textarea name="btc_instruction" rows="3"><?php echo esc_textarea($opts['btc_instruction'] ?? ''); ?></textarea></td></tr>
-        <tr><th>USDT Wallet Address</th><td><input name="usdt_wallet" value="<?php echo esc_attr($opts['usdt_wallet'] ?? ''); ?>" style="width:100%"></td></tr>
-        <tr><th>USDT Payment Instruction</th><td><textarea name="usdt_instruction" rows="3"><?php echo esc_textarea($opts['usdt_instruction'] ?? ''); ?></textarea></td></tr>
-        <tr><th>ETH Wallet Address</th><td><input name="eth_wallet" value="<?php echo esc_attr($opts['eth_wallet'] ?? ''); ?>" style="width:100%"></td></tr>
-        <tr><th>ETH Payment Instruction</th><td><textarea name="eth_instruction" rows="3"><?php echo esc_textarea($opts['eth_instruction'] ?? ''); ?></textarea></td></tr>
 
-        <tr><th>Email notifications</th><td><label><input type="checkbox" name="email_notifications" value="1" <?php checked($opts['email_notifications'] ?? 1, 1); ?>> Enable</label></td></tr>
+        <tr><th>Main balance daily interest (%)</th>
+            <td><input name="main_daily_percent" type="number" step="0.001" value="<?php echo esc_attr($opts['main_daily_percent'] ?? 2.29); ?>"></td></tr>
+
+        <tr><th>Minimum investment $</th>
+            <td><input name="min_invest" type="number" step="0.01" value="<?php echo esc_attr($opts['min_invest'] ?? 50); ?>"></td></tr>
+
+        <tr><th>Exchange rate ($ per $1)</th>
+            <td><input name="exchange_rate" type="number" step="0.01" value="<?php echo esc_attr($opts['exchange_rate'] ?? 1000); ?>"> 
+            <small>How many Naira equals $1</small></td></tr>
+
+        <tr><th>Deposit mode</th>
+            <td><select name="deposit_mode">
+                  <option value="manual" <?php selected(($opts['deposit_mode'] ?? 'manual'), 'manual'); ?>>Naira Payment</option>
+                  <option value="auto" <?php selected(($opts['deposit_mode'] ?? 'manual'), 'auto'); ?>>Crypto Payment</option>
+                </select></td></tr>
+
+        <!--tr><th>Manual payment info</th>
+            <td><textarea name="manual_payment_info" rows="4"><?php echo esc_textarea($opts['manual_payment_info'] ?? ''); ?></textarea></td></tr-->
+
+        <tr><th>Naira payment instructions</th>
+            <td><textarea name="naira_payment_info" rows="4"><?php echo esc_textarea($opts['naira_payment_info'] ?? ''); ?></textarea></td></tr>
+
+        <tr><th>BTC Wallet Address</th>
+            <td><input name="btc_wallet" value="<?php echo esc_attr($opts['btc_wallet'] ?? ''); ?>" style="width:100%"></td></tr>
+
+        <tr><th>BTC Payment Instruction</th>
+            <td><textarea name="btc_instruction" rows="3"><?php echo esc_textarea($opts['btc_instruction'] ?? ''); ?></textarea></td></tr>
+
+        <tr><th>USDT Wallet Address</th>
+            <td><input name="usdt_wallet" value="<?php echo esc_attr($opts['usdt_wallet'] ?? ''); ?>" style="width:100%"></td></tr>
+
+        <tr><th>USDT Payment Instruction</th>
+            <td><textarea name="usdt_instruction" rows="3"><?php echo esc_textarea($opts['usdt_instruction'] ?? ''); ?></textarea></td></tr>
+
+        <tr><th>ETH Wallet Address</th>
+            <td><input name="eth_wallet" value="<?php echo esc_attr($opts['eth_wallet'] ?? ''); ?>" style="width:100%"></td></tr>
+
+        <tr><th>ETH Payment Instruction</th>
+            <td><textarea name="eth_instruction" rows="3"><?php echo esc_textarea($opts['eth_instruction'] ?? ''); ?></textarea></td></tr>
+
+        <tr><th>Email notifications</th>
+            <td><label><input type="checkbox" name="email_notifications" value="1" <?php checked($opts['email_notifications'] ?? 1, 1); ?>> Enable</label></td></tr>
+
       </table>
+
+      <h2>Email Templates</h2>
+      <p>Use placeholders: <code>{name}</code> <code>{amount}</code> <code>{date}</code></p>
+
+      <table class="form-table">
+
+        <tr><th>Deposit Received (User)</th>
+            <td><textarea name="email_deposit_received" rows="5" style="width:100%"><?php echo esc_textarea($opts['email_deposit_received'] ?? "We have received your deposit of {amount}. It will be reviewed shortly."); ?></textarea></td></tr>
+
+        <tr><th>Deposit Approved</th>
+            <td><textarea name="email_deposit_approved" rows="5" style="width:100%"><?php echo esc_textarea($opts['email_deposit_approved'] ?? "Your deposit of {amount} has been approved and added to your account."); ?></textarea></td></tr>
+
+        <tr><th>Withdrawal Request Received</th>
+            <td><textarea name="email_withdraw_received" rows="5" style="width:100%"><?php echo esc_textarea($opts['email_withdraw_received'] ?? "We received your withdrawal request of {amount}. Processing soon."); ?></textarea></td></tr>
+
+        <tr><th>Withdrawal Approved</th>
+            <td><textarea name="email_withdraw_approved" rows="5" style="width:100%"><?php echo esc_textarea($opts['email_withdraw_approved'] ?? "Your withdrawal of {amount} has been approved and sent."); ?></textarea></td></tr>
+
+        <tr><th>Withdrawal Declined</th>
+            <td><textarea name="email_withdraw_declined" rows="5" style="width:100%"><?php echo esc_textarea($opts['email_withdraw_declined'] ?? "Your withdrawal request was declined. Contact support for details."); ?></textarea></td></tr>
+
+        <tr><th>Welcome Email (Registration)</th>
+            <td><textarea name="email_registration_welcome" rows="5" style="width:100%"><?php echo esc_textarea($opts['email_registration_welcome'] ?? "Welcome {name}! Your account has been created successfully."); ?></textarea></td></tr>
+
+      </table>
+
       <button class="button button-primary" name="wsi_save_settings" value="1">Save Settings</button>
-    </form></div>
+    </form>
+    </div>
     <?php
 }
+
 
 /* -------------------------------------------------------------------------
    FRONTEND: enqueue assets (tiny CSS/JS)
@@ -1437,77 +1610,6 @@ function wsi_shortcode_dashboard() {
         <div id="tab_deposit" class="wsi-tab-content">
 
           
-<!-- WSI Deposit Success Modal (injected) -->
-<div id="wsi_deposit_modal" style="display:none;position:fixed;z-index:99999;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;">
-  <div role="dialog" aria-modal="true" aria-labelledby="wsi_modal_title" style="background:#fff;max-width:520px;width:90%;margin:auto;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,0.2);padding:20px;position:relative;">
-    <h2 id="wsi_modal_title" style="margin-top:0;font-size:20px;">Deposit Pending Approval</h2>
-    <div id="wsi_modal_body" style="margin-top:10px;font-size:14px;line-height:1.5"></div>
-    <div style="text-align:right;margin-top:18px;"><button id="wsi_modal_close" style="background:#0073aa;border:0;color:#fff;padding:8px 14px;border-radius:6px;cursor:pointer;">Close</button></div>
-  </div>
-</div>
-
-<script type="text/javascript">
-(function(){
-
-  function initWsiDepositSuccessModal(){
-
-    function showModal(html){
-      var modal = document.getElementById('wsi_deposit_modal');
-      var body = document.getElementById('wsi_modal_body');
-      if(!modal || !body) return;
-
-      body.innerHTML = html;
-      modal.style.display = 'flex';
-      modal.style.alignItems = 'center';
-      modal.style.justifyContent = 'center';
-
-      var closeBtn = document.getElementById('wsi_modal_close');
-      if(closeBtn) closeBtn.focus();
-    }
-
-    function closeModal(){
-      var m = document.getElementById('wsi_deposit_modal');
-      if(m) m.style.display='none';
-    }
-
-    document.addEventListener('click', function(e){
-      if(e.target && e.target.id === 'wsi_modal_close') closeModal();
-    });
-
-    try {
-      var params = new URLSearchParams(window.location.search);
-      if (params.get('wsi_deposit') === 'success') {
-        var id = params.get('wsi_deposit_id') || '';
-        var amt = params.get('wsi_deposit_amt') || '';
-        var amt_local = params.get('wsi_deposit_amt_naira') || '';
-        var method = params.get('wsi_deposit_method') || '';
-
-        var html = '<p>Your deposit has been submitted and is pending approval.</p>';
-        html += '<p><strong>Deposit ID:</strong> ' + decodeURIComponent(id) + '</p>';
-        html += '<p><strong>Amount (USD):</strong> $' + decodeURIComponent(amt) + '</p>';
-        html += '<p><strong>Amount (Local):</strong> ' + decodeURIComponent(amt_local) + '</p>';
-        html += '<p><strong>Payment Type:</strong> ' + decodeURIComponent(method) + '</p>';
-
-        showModal(html);
-
-        if (history.replaceState) {
-          var clean = window.location.href.split('?')[0];
-          history.replaceState({}, document.title, clean);
-        }
-      }
-    } catch (err) {}
-  }
-
-  document.addEventListener("DOMContentLoaded", initWsiDepositSuccessModal);
-
-  jQuery(window).on("elementor/frontend/init", function () {
-    elementorFrontend.hooks.addAction("frontend/element_ready/global", initWsiDepositSuccessModal);
-  });
-
-})();
-</script>
-
-
 <h4>Deposit</h4>
   <?php if (($opts['deposit_mode'] ?? 'manual') === 'manual'): ?>
   <?php else: ?>
@@ -2555,6 +2657,40 @@ function wsi_handle_reinvest() {
     wsi_audit($uid, 'reinvest', "Reinvested {$amount}");
 
     wsi_popup("Reinvested Successfully", $dash_url);
+    exit;
+}
+
+
+/** User Settings Page: Logic For Processing Form Data **/
+add_action('admin_post_save_user_form', 'handle_save_user_form');
+add_action('admin_post_nopriv_save_user_form', 'handle_save_user_form'); // optional if non-logged-in users need it
+
+function handle_save_user_form() {
+
+    // Verify nonce
+    if ( !isset($_POST['save_user_form_nonce']) ||
+         !wp_verify_nonce($_POST['save_user_form_nonce'], 'save_user_form_action') ) {
+        wp_die('Security check failed');
+    }
+
+    // Sanitize and save
+    $user_id = get_current_user_id();
+
+    update_user_meta($user_id, 'first_name', sanitize_text_field($_POST['first_name'] ?? ''));
+    update_user_meta($user_id, 'last_name', sanitize_text_field($_POST['last_name'] ?? ''));
+    update_user_meta($user_id, 'phone', sanitize_text_field($_POST['phone'] ?? ''));
+    update_user_meta($user_id, 'birth_date', sanitize_text_field($_POST['birth_date'] ?? ''));
+    update_user_meta($user_id, 'address1', sanitize_text_field($_POST['address1'] ?? ''));
+    update_user_meta($user_id, 'address2', sanitize_text_field($_POST['address2'] ?? ''));
+    update_user_meta($user_id, 'landmark', sanitize_text_field($_POST['landmark'] ?? ''));
+    update_user_meta($user_id, 'street', sanitize_text_field($_POST['street'] ?? ''));
+    update_user_meta($user_id, 'country', sanitize_text_field($_POST['country'] ?? ''));
+    update_user_meta($user_id, 'zip', sanitize_text_field($_POST['zip'] ?? ''));
+    update_user_meta($user_id, 'state', sanitize_text_field($_POST['state'] ?? ''));
+    update_user_meta($user_id, 'city', sanitize_text_field($_POST['city'] ?? ''));
+
+    // Redirect back to form with success
+    wp_redirect( wp_get_referer() . '&updated=1' );
     exit;
 }
 

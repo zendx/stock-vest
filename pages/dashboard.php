@@ -1,5 +1,6 @@
 <?php
 if (!defined('ABSPATH')) exit;
+$wsi = plugins_url('assets/', __FILE__);
 
 // Get current user
 $user_id = get_current_user_id();

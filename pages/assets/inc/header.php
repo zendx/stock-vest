@@ -103,18 +103,38 @@
                                         <img src="<?php echo $wsi; ?>img/modern-ai-image/user-6.jpg" alt="">
                                     </figure>
                                 </div>
+                                <?php
+                                $user_id = get_current_user_id();
+
+                                // Get first name
+                                $first_name = get_user_meta($user_id, 'first_name', true);
+                                if (empty($first_name)) {
+                                    $first_name = wp_get_current_user()->display_name;
+                                }
+
+                                // Total assets
+                                $assets = wsi_get_main($user_id);
+                                if (empty($assets)) {
+                                    $assets = 0;
+                                }
+                                ?>
+
                                 <div class="col align-self-center">
-                                    <p class="mb-1 fw-medium">Big Baller</p>
+                                    <p class="mb-1 fw-medium">
+                                        <?php echo esc_html($first_name); ?>
+                                    </p>
                                     <p>
-                                        <i class="bi bi-wallet2 me-2"></i> 
-                                        $1100.00 <small class="opacity-50">Total Assets</small>
+                                        <i class="bi bi-wallet2 me-2"></i>
+                                        $<?php echo number_format((float)$assets, 2); ?>
+                                        <small class="opacity-50">Total Assets</small>
                                     </p>
                                 </div>
+
                             </div>
                         </div>
 
                         <div class="px-2">
-                            <a class="dropdown-item" href="investment-myprofile.html">
+                            <!--a class="dropdown-item" href="investment-myprofile.html">
                                 <i data-feather="user" class="avatar avatar-18 me-1"></i> My Profile
                             </a>
 
@@ -124,9 +144,9 @@
 
                             <a class="dropdown-item" href="investment-earning.html">
                                 <i data-feather="dollar-sign" class="avatar avatar-18 me-1"></i> Earning
-                            </a>
+                            </a-->
 
-                            <a class="dropdown-item" href="investment-settings.html">
+                            <a class="dropdown-item" href="../user-settings">
                                 <i data-feather="settings" class="avatar avatar-18 me-1"></i> Account Settings
                             </a>
 

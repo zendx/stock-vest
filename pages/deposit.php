@@ -1,26 +1,40 @@
 <?php
 
 if (!defined('ABSPATH')) exit;
-
+$wsi = plugins_url('assets/', __FILE__);
 
 $opts = function_exists('wsi_get_opts') ? wsi_get_opts() : [];
 
 // Normalize values with safe defaults
-$exchange_rate = floatval($opts['exchange_rate'] ?? 1000); // â‚¦ per $1
-$min_invest = floatval($opts['min_invest'] ?? 50);
-$deposit_mode = sanitize_text_field($opts['deposit_mode'] ?? 'manual');
+$exchange_rate       = floatval($opts['exchange_rate'] ?? 1000); // ₦ per $1
+$min_invest          = floatval($opts['min_invest'] ?? 50);
+$deposit_mode        = sanitize_text_field($opts['deposit_mode'] ?? 'manual');
 $manual_payment_info = $opts['manual_payment_info'] ?? '';
-$naira_payment_info = $opts['naira_payment_info'] ?? '';
+$naira_payment_info  = $opts['naira_payment_info'] ?? '';
 
-$btc_wallet = trim($opts['btc_wallet'] ?? '');
+$btc_wallet      = trim($opts['btc_wallet'] ?? '');
 $btc_instruction = $opts['btc_instruction'] ?? '';
-$usdt_wallet = trim($opts['usdt_wallet'] ?? '');
-$usdt_instruction = $opts['usdt_instruction'] ?? '';
-$eth_wallet = trim($opts['eth_wallet'] ?? '');
+$usdt_wallet     = trim($opts['usdt_wallet'] ?? '');
+$usdt_instruction= $opts['usdt_instruction'] ?? '';
+$eth_wallet      = trim($opts['eth_wallet'] ?? '');
 $eth_instruction = $opts['eth_instruction'] ?? '';
+
+// ------------------------------
+// Email templates (added)
+// ------------------------------
+$email_on_deposit         = $opts['email_on_deposit'] ?? '';        // user email when deposit is made
+$email_on_withdraw        = $opts['email_on_withdraw'] ?? '';       // user email when withdrawal is made
+$email_on_registration    = $opts['email_on_registration'] ?? '';   // welcome email
+$email_on_stock_purchase  = $opts['email_on_stock_purchase'] ?? ''; // stock purchase email
+$email_on_holding_sale    = $opts['email_on_holding_sale'] ?? '';   // sale notification
+$email_admin_new_deposit  = $opts['email_admin_new_deposit'] ?? ''; // admin gets notified
+$email_admin_new_withdraw = $opts['email_admin_new_withdraw'] ?? ''; // admin withdraw alert
+
 
 // default naira amount shown = min_invest * exchange_rate
 $default_naira = number_format($min_invest * max(1, $exchange_rate), 2, '.', '');
+
+/** Get Wallet Details **/
 ?>
 
 <!DOCTYPE html>
@@ -133,7 +147,7 @@ $default_naira = number_format($min_invest * max(1, $exchange_rate), 2, '.', '')
                                                                             <input name="amount_naira" id="amount_naira" type="number" min="0" 
                                                                                    class="form-control"
                                                                                    value="<?php echo esc_attr($opts['min_invest'] ?? 50) * ($opts['exchange_rate'] ?? 1000); ?>">
-                                                                            <label for="amount_naira">Enter Amount (â‚¦)</label>
+                                                                            <label for="amount_naira">Enter Amount (₦)</label>
                                                                         </div>
                                                                     </div>
 
@@ -146,7 +160,7 @@ $default_naira = number_format($min_invest * max(1, $exchange_rate), 2, '.', '')
                                                                 </div>
 
                                                                 <div id="rate_info" class="text-secondary small mb-2">
-                                                                    Exchange Rate: $1 = â‚¦<?php echo esc_html(number_format($opts['exchange_rate'] ?? 1000,2)); ?>
+                                                                    Exchange Rate: $1 = ₦<?php echo esc_html(number_format($opts['exchange_rate'] ?? 1000,2)); ?>
                                                                 </div>
 
                                                                 <div id="naira_instructions" class="mb-3">
@@ -600,6 +614,44 @@ $default_naira = number_format($min_invest * max(1, $exchange_rate), 2, '.', '')
                 });
             });
             </script>
+            <!--Deposit Modal-->
+            <div id="deposit-toast" style="
+                display:none;
+                position:fixed;
+                top:20px;
+                right:20px;
+                background:#4CAF50;
+                color:#fff;
+                padding:12px 20px;
+                border-radius:6px;
+                box-shadow:0 4px 12px rgba(0,0,0,0.2);
+                z-index:9999;
+                font-family:sans-serif;
+                font-size:14px;
+            ">
+                Deposit Successful
+            </div>
+            <script>
+                function showDepositToast() {
+                    const toast = document.getElementById('deposit-toast');
+                    toast.style.display = 'block';
+                    
+                    setTimeout(() => {
+                        toast.style.display = 'none';
+                    }, 3000); // hide after 3 seconds
+                }
+
+                document.getElementById('wsi_deposit_submit').addEventListener('click', function() {
+                    // Submit the form normally
+                    document.getElementById('wsi-deposit-form').submit();
+
+                    // Show the simple success popup
+                    showDepositToast();
+                });
+
+
+            </script>
+
 
         </body>
 
