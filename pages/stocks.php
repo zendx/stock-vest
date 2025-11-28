@@ -1,19 +1,25 @@
     <?php
     if (!defined('ABSPATH')) exit;
-$wsi = plugins_url('assets/', __FILE__);
+
+    $wsi = plugins_url('assets/', __FILE__);
 
     //Load Stocks Table
     global $wpdb;
 
     $t_stocks = $wpdb->prefix . 'wsi_stocks';
 
-    $stocks = $wpdb->get_results("
-        SELECT * FROM $t_stocks 
-        WHERE active = 1 
-        ORDER BY id DESC
-    ");
-
+    // Only query if the table exists
+    if ($wpdb->get_var("SHOW TABLES LIKE '$t_stocks'") === $t_stocks) {
+        $stocks = $wpdb->get_results("
+            SELECT * FROM $t_stocks 
+            WHERE active = 1 
+            ORDER BY id DESC
+        ");
+    } else {
+        $stocks = []; // table not ready
+    }
     ?>
+
     <!DOCTYPE html>
     <html lang="en">
     <!-- dir="rtl"-->
