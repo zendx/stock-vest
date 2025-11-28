@@ -1899,8 +1899,8 @@ function wsi_shortcode_dashboard() {
     <script>
     jQuery(function($) {
 
-        // Intercept deposit form submission
-        $(document).on("click", "#wsi_deposit_submit", function(e) {
+        // Global event delegation – survives Elementor refresh
+        $(document).off("click.wsiDeposit").on("click.wsiDeposit", "#wsi_deposit_submit", function(e) {
             e.preventDefault();
 
             let btn = $(this);
@@ -1912,6 +1912,7 @@ function wsi_shortcode_dashboard() {
             }
 
             let formData = new FormData(form[0]);
+            formData.append("action", "wsi_submit_deposit"); // ensures AJAX route
 
             btn.prop("disabled", true).text("Processing...");
 
@@ -1921,6 +1922,7 @@ function wsi_shortcode_dashboard() {
                 data: formData,
                 processData: false,
                 contentType: false,
+
                 success: function(resp) {
                     btn.prop("disabled", false).text("Submit");
 
@@ -1930,11 +1932,12 @@ function wsi_shortcode_dashboard() {
 
                     if (resp.success) {
                         alert(resp.data.message);
-                        window.location.reload();   // → Stay on same page
+                        window.location.reload(); // always remain on this page
                     } else {
                         alert(resp.data ? resp.data.message : "Deposit failed.");
                     }
                 },
+
                 error: function() {
                     btn.prop("disabled", false).text("Submit");
                     alert("Network error, please try again.");
