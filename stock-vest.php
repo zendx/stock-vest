@@ -1298,7 +1298,7 @@ function wsi_admin_settings() {
         $daily = floatval($_POST['main_daily_percent']);
         $min = floatval($_POST['min_invest']);
         $mode = sanitize_text_field($_POST['deposit_mode']);
-        $manual = sanitize_textarea_field($_POST['manual_payment_info']);
+        $manual = sanitize_textarea_field($_POST['manual_payment_info'] ?? '');
         $email = !empty($_POST['email_notifications']) ? 1 : 0;
         $exchange_rate = floatval($_POST['exchange_rate'] ?? ($opts['exchange_rate'] ?? 1000));
 
