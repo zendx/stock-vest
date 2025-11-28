@@ -115,7 +115,6 @@ function wsi_deactivate() {
 function wsi_create_tables() {
     global $wpdb;
     $charset_collate = $wpdb->get_charset_collate();
-
     $t1 = $wpdb->prefix . 'wsi_deposits';
     $t2 = $wpdb->prefix . 'wsi_withdrawals';
     $t3 = $wpdb->prefix . 'wsi_transactions';
@@ -125,104 +124,89 @@ function wsi_create_tables() {
 
     require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
 
-    // 1. Deposits
-    dbDelta("
-        CREATE TABLE $t1 (
-            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-            user_id BIGINT UNSIGNED NOT NULL,
-            amount DECIMAL(14,2) NOT NULL,
-            amount_local DECIMAL(14,2) DEFAULT 0,
-            payment_type VARCHAR(80) DEFAULT '',
-            wallet VARCHAR(255) DEFAULT '',
-            method VARCHAR(80) DEFAULT '',
-            status VARCHAR(32) DEFAULT 'pending',
-            token VARCHAR(128),
-            admin_note TEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (id),
-            KEY user_id (user_id),
-            KEY status (status)
-        ) $charset_collate;
-    ");
+    $sql = "
+    CREATE TABLE IF NOT EXISTS $t1 (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      user_id BIGINT UNSIGNED NOT NULL,
+      amount DECIMAL(14,2) NOT NULL,
+      amount_local DECIMAL(14,2) DEFAULT 0,
+      payment_type VARCHAR(80) DEFAULT '',
+      wallet VARCHAR(255) DEFAULT '',
+      method VARCHAR(80) DEFAULT '',
+      status VARCHAR(32) DEFAULT 'pending',
+      token VARCHAR(128),
+      admin_note TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      KEY user_id (user_id),
+      KEY status (status)
+    ) $charset_collate;
 
-    // 2. Withdrawals
-    dbDelta("
-        CREATE TABLE $t2 (
-            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-            user_id BIGINT UNSIGNED NOT NULL,
-            amount DECIMAL(14,2) NOT NULL,
-            method VARCHAR(80) DEFAULT '',
-            account_details TEXT,
-            status VARCHAR(32) DEFAULT 'pending',
-            admin_note TEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (id),
-            KEY user_id (user_id),
-            KEY status (status)
-        ) $charset_collate;
-    ");
+    CREATE TABLE IF NOT EXISTS $t2 (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      user_id BIGINT UNSIGNED NOT NULL,
+      amount DECIMAL(14,2) NOT NULL,
+      method VARCHAR(80) DEFAULT '',          /* <--- ADDED */
+      account_details TEXT,
+      status VARCHAR(32) DEFAULT 'pending',
+      admin_note TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      KEY user_id (user_id),
+      KEY status (status)
+    ) $charset_collate;
 
-    // 3. Transactions
-    dbDelta("
-        CREATE TABLE $t3 (
-            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-            user_id BIGINT UNSIGNED NOT NULL,
-            amount DECIMAL(14,2) NOT NULL,
-            type VARCHAR(60) NOT NULL,
-            description TEXT,
-            meta LONGTEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (id),
-            KEY user_id (user_id)
-        ) $charset_collate;
-    ");
+    CREATE TABLE IF NOT EXISTS $t3 (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      user_id BIGINT UNSIGNED NOT NULL,
+      amount DECIMAL(14,2) NOT NULL,
+      type VARCHAR(60) NOT NULL,
+      description TEXT,
+      meta LONGTEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      KEY user_id (user_id)
+    ) $charset_collate;
 
-    // 4. Stocks
-    dbDelta("
-        CREATE TABLE $t4 (
-            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-            name VARCHAR(255) NOT NULL,
-            price DECIMAL(14,2) NOT NULL,
-            rate_percent DECIMAL(8,4) NOT NULL,
-            rate_period ENUM('daily','hourly') DEFAULT 'daily',
-            active TINYINT(1) DEFAULT 1,
-            image VARCHAR(255) DEFAULT NULL,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (id)
-        ) $charset_collate;
-    ");
+    CREATE TABLE IF NOT EXISTS $t4 (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      name VARCHAR(255) NOT NULL,
+      price DECIMAL(14,2) NOT NULL,
+      rate_percent DECIMAL(8,4) NOT NULL,
+      rate_period ENUM('daily','hourly') DEFAULT 'daily',
+      active TINYINT(1) DEFAULT 1,
+      image VARCHAR(255) DEFAULT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id)
+    ) $charset_collate;
 
-    // 5. Holdings
-    dbDelta("
-        CREATE TABLE $t5 (
-            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-            user_id BIGINT UNSIGNED NOT NULL,
-            stock_id BIGINT UNSIGNED NOT NULL,
-            invested_amount DECIMAL(14,2) NOT NULL,
-            shares DECIMAL(20,8) NOT NULL,
-            accumulated_profit DECIMAL(14,2) DEFAULT 0,
-            status VARCHAR(32) DEFAULT 'open',
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (id),
-            KEY user_id (user_id),
-            KEY stock_id (stock_id),
-            KEY status (status)
-        ) $charset_collate;
-    ");
+    CREATE TABLE IF NOT EXISTS $t5 (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      user_id BIGINT UNSIGNED NOT NULL,
+      stock_id BIGINT UNSIGNED NOT NULL,
+      invested_amount DECIMAL(14,2) NOT NULL,
+      shares DECIMAL(20,8) NOT NULL,
+      accumulated_profit DECIMAL(14,2) DEFAULT 0,
+      status VARCHAR(32) DEFAULT 'open',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      KEY user_id (user_id),
+      KEY stock_id (stock_id),
+      KEY status (status)
+    ) $charset_collate;
 
-    // 6. Audit
-    dbDelta("
-        CREATE TABLE $t6 (
-            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-            actor_id BIGINT UNSIGNED,
-            action VARCHAR(255),
-            details TEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (id)
-        ) $charset_collate;
-    ");
+    CREATE TABLE IF NOT EXISTS $t6 (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      actor_id BIGINT UNSIGNED,
+      action VARCHAR(255),
+      details TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id)
+    ) $charset_collate;
+    ";
+
+    dbDelta($sql);
 }
-
 
 
 /**
