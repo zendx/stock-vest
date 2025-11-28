@@ -1896,6 +1896,55 @@ function wsi_shortcode_dashboard() {
 
     });
     </script>
+    <script>
+    jQuery(function($) {
+
+        // Intercept deposit form submission
+        $(document).on("click", "#wsi_deposit_submit", function(e) {
+            e.preventDefault();
+
+            let btn = $(this);
+            let form = btn.closest("form");
+
+            if (!form.length) {
+                alert("Deposit form not found.");
+                return;
+            }
+
+            let formData = new FormData(form[0]);
+
+            btn.prop("disabled", true).text("Processing...");
+
+            $.ajax({
+                url: "<?php echo admin_url('admin-ajax.php'); ?>",
+                type: "POST",
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function(resp) {
+                    btn.prop("disabled", false).text("Submit");
+
+                    if (typeof resp === "string") {
+                        try { resp = JSON.parse(resp); } catch (e) {}
+                    }
+
+                    if (resp.success) {
+                        alert(resp.data.message);
+                        window.location.reload();   // → Stay on same page
+                    } else {
+                        alert(resp.data ? resp.data.message : "Deposit failed.");
+                    }
+                },
+                error: function() {
+                    btn.prop("disabled", false).text("Submit");
+                    alert("Network error, please try again.");
+                }
+            });
+        });
+
+    });
+    </script>
+
 
     <script>
     (function(){
