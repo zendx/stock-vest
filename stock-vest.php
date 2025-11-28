@@ -302,7 +302,46 @@ if (!function_exists('wsi_add_transaction')) {
                 'created_at' => current_time('mysql'),
             ]);
         
-$deposit_id = $wpdb->insert_id;
+            $deposit_id = $wpdb->insert_id;
+
+            // ---------- EMAIL TRIGGERS (insert right here) ----------
+            if (!empty($deposit_id)) {
+                // $type is already sanitized earlier: identify event types by $type string
+                // You may use types like: 'deposit_received', 'deposit_approved', 'withdraw_received', 'withdraw_approved', 'withdraw_declined'
+                // If your code uses different $type strings, adapt the checks accordingly.
+
+                // deposit request submitted
+                if (strpos($type, 'deposit') !== false && strpos($type, 'approved') === false) {
+                    wsi_send_email_template($user_id, 'email_deposit_received', ['amount' => $amount]);
+                }
+
+                // deposit approved (type contains 'deposit' and 'approved')
+                if (strpos($type, 'deposit') !== false && strpos($type, 'approved') !== false) {
+                    wsi_send_email_template($user_id, 'email_deposit_approved', ['amount' => $amount]);
+                }
+
+                // withdrawal request submitted
+                if (strpos($type, 'withdraw') !== false && strpos($type, 'approved') === false && strpos($type, 'declined') === false) {
+                    wsi_send_email_template($user_id, 'email_withdraw_received', ['amount' => $amount]);
+                }
+
+                // withdrawal approved
+                if (strpos($type, 'withdraw') !== false && strpos($type, 'approved') !== false) {
+                    wsi_send_email_template($user_id, 'email_withdraw_approved', ['amount' => $amount]);
+                }
+
+                // withdrawal declined
+                if (strpos($type, 'withdraw') !== false && strpos($type, 'declined') !== false) {
+                    wsi_send_email_template($user_id, 'email_withdraw_declined', ['amount' => $amount]);
+                }
+
+                // generic registration welcome (if you log registration via transactions with a type like 'registration_welcome')
+                if (strpos($type, 'registration') !== false) {
+                    wsi_send_email_template($user_id, 'email_registration_welcome', $vars ?? []);
+                }
+            }
+            // ---------- END EMAIL TRIGGERS ----------
+
 
 // Ensure we have readable values for confirmation
 $amount_display = number_format((float)$amount, 2);
@@ -1246,6 +1285,9 @@ function wsi_admin_transactions() {
 /* -------------------------------------------------------------------------
    ADMIN: Settings
 ------------------------------------------------------------------------- */
+wsi_update_opt('email_smart_farming_on', sanitize_textarea_field($_POST['email_smart_farming_on'] ?? ''));
+wsi_update_opt('email_smart_farming_off', sanitize_textarea_field($_POST['email_smart_farming_off'] ?? ''));
+
 function wsi_admin_settings() {
     if (!current_user_can('manage_options')) return;
 
@@ -1367,6 +1409,15 @@ function wsi_admin_settings() {
 
         <tr><th>Welcome Email (Registration)</th>
             <td><textarea name="email_registration_welcome" rows="5" style="width:100%"><?php echo esc_textarea($opts['email_registration_welcome'] ?? "Welcome {name}! Your account has been created successfully."); ?></textarea></td></tr>
+
+        <tr><th>Smart Farming Activated</th>
+            <td><textarea name="email_smart_farming_on" rows="4" style="width:100%"><?php echo esc_textarea($opts['email_smart_farming_on'] ?? "Your Smart Farming feature is now active. Enjoy the automated farming benefits!"); ?></textarea></td></tr>
+
+        <tr><th>Smart Farming Deactivated</th>
+            <td><textarea name="email_smart_farming_off" rows="4" style="width:100%"><?php echo esc_textarea($opts['email_smart_farming_off'] ?? "Smart Farming has been disabled on your account. You can reactivate it at any time."); ?></textarea></td></tr>
+
+
+
 
       </table>
 
@@ -2400,8 +2451,16 @@ function wsi_toggle_smart_farming() {
     $status = ($_POST['status'] === 'yes') ? 'yes' : 'no';
     update_user_meta($uid, 'wsi_smart_farming', $status);
 
+    // send user email on change
+    if ($status === 'yes') {
+        wsi_send_email_template($uid, 'email_smart_farming_on');
+    } else {
+        wsi_send_email_template($uid, 'email_smart_farming_off');
+    }
+
     wp_die('1');
 }
+
 
 
 /* -------------------------------------------------------------------------
@@ -2506,8 +2565,10 @@ function wsi_toggle_farming() {
 
     if ($state === 'yes') {
         update_user_meta($uid, 'wsi_smart_farming', 'yes');
+        wsi_send_email_template($uid, 'email_smart_farming_on');
     } else {
         update_user_meta($uid, 'wsi_smart_farming', 'no');
+        wsi_send_email_template($uid, 'email_smart_farming_off');
     }
 
     echo 'ok';
@@ -2669,6 +2730,37 @@ function wsi_handle_withdraw() {
 function wsi_get_dashboard_page_url() {
     return home_url('/wsi/dashboard/');
 }
+
+/* Helper For Mailing */
+function wsi_send_email_template($user_id, $template_key, $vars = []) {
+    $opts = wsi_get_opts();
+    if (empty($opts['email_notifications'])) return false;
+
+    $user = get_userdata($user_id);
+    if (!$user || !is_email($user->user_email)) return false;
+
+    $template = $opts[$template_key] ?? '';
+    if (trim($template) === '') return false;
+
+    // default placeholders
+    $replacements = [
+        '{name}'   => $user->display_name ?: $user->user_login,
+        '{amount}' => isset($vars['amount']) ? number_format((float)$vars['amount'], 2) : '',
+        '{date}'   => date('Y-m-d H:i:s'),
+        '{plan}'   => $vars['plan'] ?? '',
+    ];
+
+    $message = str_replace(array_keys($replacements), array_values($replacements), $template);
+
+    // Send as HTML
+    $headers = ['Content-Type: text/html; charset=UTF-8'];
+
+    // Subject can be per-template or a generic subject
+    $subject = $opts[$template_key . '_subject'] ?? 'WSI Notification';
+
+    return wp_mail($user->user_email, $subject, nl2br($message), $headers);
+}
+
 
 /* Helper to redirect to the login page */
 function wsi_get_login_page_url() {
