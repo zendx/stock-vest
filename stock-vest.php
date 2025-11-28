@@ -132,6 +132,7 @@ function wsi_create_tables() {
       amount_local DECIMAL(14,2) DEFAULT 0,
       payment_type VARCHAR(80) DEFAULT '',
       wallet VARCHAR(255) DEFAULT '',
+      crypto_wallet VARCHAR(255) DEFAULT '',   /* <-- FIXED (ADDED) */
       method VARCHAR(80) DEFAULT '',
       status VARCHAR(32) DEFAULT 'pending',
       token VARCHAR(128),
@@ -146,7 +147,7 @@ function wsi_create_tables() {
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
       user_id BIGINT UNSIGNED NOT NULL,
       amount DECIMAL(14,2) NOT NULL,
-      method VARCHAR(80) DEFAULT '',          /* <--- ADDED */
+      method VARCHAR(80) DEFAULT '',
       account_details TEXT,
       status VARCHAR(32) DEFAULT 'pending',
       admin_note TEXT,
