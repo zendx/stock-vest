@@ -746,20 +746,35 @@ add_action('template_redirect', function () {
 
     if (!is_user_logged_in()) return;
 
-    // Current URL
+    // Allow admins full access
+    if (current_user_can('manage_options')) return;
+
     $current = trim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), '/');
 
-    // Dashboard URL
-    $dashboard_path = trim(parse_url(wsi_get_dashboard_page_url(), PHP_URL_PATH), '/');
+    // Paths that should NEVER be redirected
+    $allowed_pages = [
+        'wsi/dashboard',
+        'wsi/login',
+        'wsi/logout',
+        'wsi/profile',
+        'wsi/deposit',
+        'wsi/withdrawal',
+        'wsi/transactions',
+    ];
 
-    // Prevent redirect loop
-    if ($current === $dashboard_path) return;
+    // If the current page is one of the plugin pages, do not redirect
+    if (in_array($current, $allowed_pages, true)) return;
 
-    // Redirect all logged-in users
-    wp_safe_redirect(wsi_get_dashboard_page_url());
-    exit;
+    // If user tries to access wp-admin, block and redirect to dashboard
+    if (is_admin() && !defined('DOING_AJAX')) {
+        wp_safe_redirect(home_url('/wsi/dashboard/'));
+        exit;
+    }
 
+    // DO NOT redirect any other frontend pages
+    // That is the fix — remove global redirect
 });
+
 
 
 /* -------------------------------------------------------------------------
