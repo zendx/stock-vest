@@ -158,10 +158,10 @@
                 </div>
 
                 <!-- Mobile nav toggle -->
-                <button class="navbar-toggler btn btn-link btn-link-header btn-square btn-icon collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#header-navbar">
+                <!--button class="navbar-toggler btn btn-link btn-link-header btn-square btn-icon collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#header-navbar">
                     <i data-feather="more-vertical" class="openbtn"></i>
                     <i data-feather="x" class="closebtn"></i>
-                </button>
+                </button-->
             </div>
         </div>
     </nav>

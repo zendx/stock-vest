@@ -187,15 +187,15 @@ $wsi = plugins_url('assets/', __FILE__);
                                     <i class="bi bi-coin avatar avatar-60 bg-theme-1-subtle text-theme-1 rounded h4 mb-3"></i>
                                     <br>
                                     <h6>3. Trial Earning</h6>
-                                    <p class="text-secondary">Earn $ 1.50 on successful completion of trial period by your referring</p>
+                                    <p class="text-secondary">Earn $ 10% on successful completion and deposit by your referring</p>
                                 </div>
                                 <!-- step 4 -->
-                                <div class="col-12 col-sm-6 col-lg-3 mb-4">
+                                <!--div class="col-12 col-sm-6 col-lg-3 mb-4">
                                     <i class="bi bi-cash-stack avatar avatar-60 bg-theme-1-subtle text-theme-1 rounded h4 mb-3"></i>
                                     <br>
                                     <h6>4. Purchase Membership</h6>
                                     <p class="text-secondary">Earn 10% on each purchase made by your referral members in lifetime</p>
-                                </div>
+                                </div-->
                             </div>
                         </div>
                     </main>

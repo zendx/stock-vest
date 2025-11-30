@@ -182,7 +182,7 @@ $available_balance = number_format($available_balance, 2);
                                 </div>
 
                                 <!-- chart -->
-                                <div class="col-12 col-md-12 col-lg-8 mb-4">
+                                <!--div class="col-12 col-md-12 col-lg-8 mb-4">
                                     <div class="card adminuiux-card">
                                         <div class="card-header">
                                             <div class="row align-items-center">
@@ -225,7 +225,7 @@ $available_balance = number_format($available_balance, 2);
                                             </div>
                                         </div>
                                     </div>
-                                </div>
+                                </div-->
 
                                 <!-- quick exchange -->
                                 <!--div class="col-12 col-md-6 col-lg-4">

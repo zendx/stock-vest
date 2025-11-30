@@ -9,26 +9,37 @@
 
 if (!defined('ABSPATH')) exit;
 
-
-
-
-
-/* Silent auto-migration: add payment_type and wallet columns if missing */
-add_action('admin_init', 'wsi_maybe_add_deposit_columns');
-function wsi_maybe_add_deposit_columns() {
+/* -------------------------------------------------------------------------
+   HARD PROTECTION — Prevent ANY ALTER TABLE or SHOW COLUMNS
+   unless the deposits table actually exists.
+------------------------------------------------------------------------- */
+function wsi_table_exists() {
     global $wpdb;
     $t = $wpdb->prefix . 'wsi_deposits';
-    // check columns
-    $cols = $wpdb->get_results("SHOW COLUMNS FROM `{$t}` LIKE 'payment_type'"); 
-    if (empty($cols)) {
-        // add columns silently
+    return $wpdb->get_var("SHOW TABLES LIKE '{$t}'") === $t;
+}
+
+/* -------------------------------------------------------------------------
+   SAFE: Only run column repair AFTER tables exist
+------------------------------------------------------------------------- */
+function wsi_safe_migration() {
+    global $wpdb;
+    $t = $wpdb->prefix . 'wsi_deposits';
+
+    // if table does NOT exist, STOP — do NOT run migration
+    $table_exists = $wpdb->get_var("SHOW TABLES LIKE '{$t}'");
+    if (!$table_exists) return;
+
+    // check columns safely
+    if (!$wpdb->get_var("SHOW COLUMNS FROM `{$t}` LIKE 'payment_type'")) {
         $wpdb->query("ALTER TABLE `{$t}` ADD COLUMN `payment_type` VARCHAR(20) NULL DEFAULT NULL");
     }
-    $cols = $wpdb->get_results("SHOW COLUMNS FROM `{$t}` LIKE 'wallet'"); 
-    if (empty($cols)) {
+
+    if (!$wpdb->get_var("SHOW COLUMNS FROM `{$t}` LIKE 'wallet'")) {
         $wpdb->query("ALTER TABLE `{$t}` ADD COLUMN `wallet` VARCHAR(100) NULL DEFAULT NULL");
     }
 }
+add_action('admin_init', 'wsi_safe_migration');
 
 /* -------------------------------------------------------------------------
    CONSTANTS
@@ -46,17 +57,14 @@ register_deactivation_hook(WSI_FILE, 'wsi_deactivate');
 function wsi_activate() {
     wsi_create_tables();
 
-    // schedule hourly (for hourly stock accrual)
     if (!wp_next_scheduled('wsi_hourly_accrue')) {
         wp_schedule_event(time(), 'hourly', 'wsi_hourly_accrue');
     }
 
-    // schedule daily (for daily interest + holdings accrual)
     if (!wp_next_scheduled('wsi_daily_accrue')) {
         wp_schedule_event(time(), 'daily', 'wsi_daily_accrue');
     }
 
-    // create default options if missing
     if (get_option('wsi_options') === false) {
         update_option('wsi_options', [
             'main_daily_percent' => 2.29,
@@ -68,39 +76,37 @@ function wsi_activate() {
     }
 }
 
-
-
-/*-- Repair Function--*/
+/* -- Column Repair (AFTER activation) -- */
 function wsi_fix_missing_deposit_columns() {
+    if (!wsi_table_exists()) return; // STOP if table is missing
+
     global $wpdb;
     $t = $wpdb->prefix . 'wsi_deposits';
 
-    // Check & add amount_local
     if (!$wpdb->get_var("SHOW COLUMNS FROM $t LIKE 'amount_local'")) {
         $wpdb->query("ALTER TABLE $t ADD COLUMN amount_local DECIMAL(14,2) DEFAULT 0 AFTER amount");
     }
 
-    // Check & add payment_type
     if (!$wpdb->get_var("SHOW COLUMNS FROM $t LIKE 'payment_type'")) {
         $wpdb->query("ALTER TABLE $t ADD COLUMN payment_type VARCHAR(80) DEFAULT '' AFTER amount_local");
     }
 
-    // Check & add wallet
     if (!$wpdb->get_var("SHOW COLUMNS FROM $t LIKE 'wallet'")) {
         $wpdb->query("ALTER TABLE $t ADD COLUMN wallet VARCHAR(255) DEFAULT '' AFTER payment_type");
     }
 
-    // Check & add method
     if (!$wpdb->get_var("SHOW COLUMNS FROM $t LIKE 'method'")) {
         $wpdb->query("ALTER TABLE $t ADD COLUMN method VARCHAR(80) DEFAULT '' AFTER wallet");
     }
 
-    // Check & add admin_note
     if (!$wpdb->get_var("SHOW COLUMNS FROM $t LIKE 'admin_note'")) {
         $wpdb->query("ALTER TABLE $t ADD COLUMN admin_note TEXT AFTER token");
     }
 }
+
+
 add_action('plugins_loaded', 'wsi_fix_missing_deposit_columns');
+
 
 
 
@@ -115,35 +121,32 @@ function wsi_deactivate() {
 function wsi_create_tables() {
     global $wpdb;
     $charset_collate = $wpdb->get_charset_collate();
-    $t1 = $wpdb->prefix . 'wsi_deposits';
-    $t2 = $wpdb->prefix . 'wsi_withdrawals';
-    $t3 = $wpdb->prefix . 'wsi_transactions';
-    $t4 = $wpdb->prefix . 'wsi_stocks';
-    $t5 = $wpdb->prefix . 'wsi_holdings';
-    $t6 = $wpdb->prefix . 'wsi_audit';
 
     require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
 
-    $sql = "
-    CREATE TABLE IF NOT EXISTS $t1 (
+    $tables = [];
+
+    // deposits
+    $tables[] = "CREATE TABLE {$wpdb->prefix}wsi_deposits (
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
       user_id BIGINT UNSIGNED NOT NULL,
       amount DECIMAL(14,2) NOT NULL,
-      amount_local DECIMAL(14,2) DEFAULT 0,
+      amount_local DECIMAL(14,2) NOT NULL DEFAULT 0,
       payment_type VARCHAR(80) DEFAULT '',
       wallet VARCHAR(255) DEFAULT '',
-      crypto_wallet VARCHAR(255) DEFAULT '',   /* <-- FIXED (ADDED) */
+      crypto_wallet VARCHAR(255) DEFAULT '',
       method VARCHAR(80) DEFAULT '',
       status VARCHAR(32) DEFAULT 'pending',
-      token VARCHAR(128),
+      token VARCHAR(128) DEFAULT '',
       admin_note TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (id),
       KEY user_id (user_id),
       KEY status (status)
-    ) $charset_collate;
+    ) $charset_collate;";
 
-    CREATE TABLE IF NOT EXISTS $t2 (
+    // withdrawals
+    $tables[] = "CREATE TABLE {$wpdb->prefix}wsi_withdrawals (
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
       user_id BIGINT UNSIGNED NOT NULL,
       amount DECIMAL(14,2) NOT NULL,
@@ -155,9 +158,10 @@ function wsi_create_tables() {
       PRIMARY KEY (id),
       KEY user_id (user_id),
       KEY status (status)
-    ) $charset_collate;
+    ) $charset_collate;";
 
-    CREATE TABLE IF NOT EXISTS $t3 (
+    // transactions
+    $tables[] = "CREATE TABLE {$wpdb->prefix}wsi_transactions (
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
       user_id BIGINT UNSIGNED NOT NULL,
       amount DECIMAL(14,2) NOT NULL,
@@ -167,9 +171,10 @@ function wsi_create_tables() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (id),
       KEY user_id (user_id)
-    ) $charset_collate;
+    ) $charset_collate;";
 
-    CREATE TABLE IF NOT EXISTS $t4 (
+    // stocks
+    $tables[] = "CREATE TABLE {$wpdb->prefix}wsi_stocks (
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
       name VARCHAR(255) NOT NULL,
       price DECIMAL(14,2) NOT NULL,
@@ -179,9 +184,10 @@ function wsi_create_tables() {
       image VARCHAR(255) DEFAULT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (id)
-    ) $charset_collate;
+    ) $charset_collate;";
 
-    CREATE TABLE IF NOT EXISTS $t5 (
+    // holdings
+    $tables[] = "CREATE TABLE {$wpdb->prefix}wsi_holdings (
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
       user_id BIGINT UNSIGNED NOT NULL,
       stock_id BIGINT UNSIGNED NOT NULL,
@@ -194,20 +200,24 @@ function wsi_create_tables() {
       KEY user_id (user_id),
       KEY stock_id (stock_id),
       KEY status (status)
-    ) $charset_collate;
+    ) $charset_collate;";
 
-    CREATE TABLE IF NOT EXISTS $t6 (
+    // audit
+    $tables[] = "CREATE TABLE {$wpdb->prefix}wsi_audit (
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
       actor_id BIGINT UNSIGNED,
       action VARCHAR(255),
       details TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (id)
-    ) $charset_collate;
-    ";
+    ) $charset_collate;";
 
-    dbDelta($sql);
+    // run dbDelta on each table
+    foreach ($tables as $sql) {
+        dbDelta($sql);
+    }
 }
+
 
 
 /**
@@ -219,6 +229,12 @@ function wsi_deposits_auto_migrate() {
     $table = $wpdb->prefix . 'wsi_deposits';
 
     // Get existing columns
+    if ($wpdb->get_var($wpdb->prepare(
+        "SHOW TABLES LIKE %s", $table
+    )) !== $table) {
+        return;
+    }
+
     $columns = $wpdb->get_col("SHOW COLUMNS FROM $table", 0);
     if (!$columns) return;
 
@@ -441,7 +457,7 @@ function wsi_get_invite_link($uid = 0) {
     $code = wsi_ensure_invite_code($uid);
 
     // Return pretty URL: site.com/wsi/signup/CODE
-    return site_url("wsi/signup/$code");
+    return site_url("wsi/signup/?ref=$code");
 }
 
 function wsi_get_register_page() {
@@ -487,6 +503,24 @@ function wsi_attach_inviter($user_id) {
     }
     wsi_ensure_invite_code($user_id);
 }
+
+add_action('template_redirect', function () {
+
+    $ref = get_query_var('wsi_referral');
+
+    // Stop if not a referral URL
+    if (empty($ref)) return;
+
+    // Set referral cookie
+    $ref = sanitize_text_field($ref);
+    setcookie('wsi_ref', $ref, time() + 3600, COOKIEPATH, COOKIE_DOMAIN);
+    $_COOKIE['wsi_ref'] = $ref;
+
+    // DO NOT REDIRECT
+    // Just allow the page to load normally on /wsi/signup/<code>
+});
+
+
 
 /* -------------------------------------------------------------------------
    Admin menu (fixed slugs and callbacks)
@@ -702,6 +736,25 @@ function wsi_admin_users() {
 
 <?php
 }
+
+
+/* -------------------------------------------------------------------------
+    LOGIN REDIRECT FUNCTION
+---------------------------------------------------------------------------/
+
+// Force redirect after successful login
+add_filter('login_redirect', 'wsi_login_redirect', 100, 3);
+function wsi_login_redirect($redirect_to, $requested_redirect_to, $user) {
+
+    // Only run if login was successful
+    if (is_wp_error($user)) {
+        return $redirect_to;
+    }
+
+    // Always redirect normal users to WSI dashboard
+    return site_url('/wsi/dashboard/');
+}
+
 
 
 /* -------------------------------------------------------------------------
@@ -3129,72 +3182,39 @@ function wsi_inv_buy_stock() {
 ------------------------------------------------------------------------- */
 
 
-
-/* -------------------------------------------------------
-   WSI LOGIN / LOGOUT / DASHBOARD REDIRECT SYSTEM
-------------------------------------------------------- */
-
-function wsi_dashboard_url() {
-    return function_exists('wsi_get_dashboard_page_url')
-        ? wsi_get_dashboard_page_url()
-        : home_url('/wsi/dashboard/');
-}
-
-function wsi_login_url() {
-    return function_exists('wsi_get_login_page_url')
-        ? wsi_get_login_page_url()
-        : home_url('/wsi/login/');
-}
-
-/* ---------------------------------------------------------
-   Redirect logged-in users away from the login page to /wsi/dashboard
---------------------------------------------------------- */
+/** LOGIN/SIGNUP REDIRECT**/
 add_action('template_redirect', function () {
 
-    // Get the current page URI (remove leading/trailing slashes)
-    $current = trim($_SERVER['REQUEST_URI'], '/');
+    // Current path without leading/trailing slashes
+    $current = trim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), '/');
 
-    // Check if the current page is 'wsi/login' and user is logged in
-    if ($current === '/wsi/login/' && is_user_logged_in()) {
-        
-        // Redirect to the custom dashboard page
-        wp_safe_redirect(home_url('/wsi/dashboard/'));
-        exit;
-    }
-});
-
-
-
-/* -------------------------------------------------------
-   2. Redirect user after logout
-------------------------------------------------------- */
-add_action('wp_logout', function () {
-    wp_safe_redirect(wsi_login_url());
-    exit;
-});
-
-
-/* -------------------------------------------------------
-   3. Control access to login / dashboard pages
-------------------------------------------------------- */
-add_action('template_redirect', function () {
-
-    $current = trim($_SERVER['REQUEST_URI'], '/');
     $is_login     = ($current === 'wsi/login');
     $is_dashboard = ($current === 'wsi/dashboard');
 
-    /* ---- Logged-in user cannot see login page ---- */
+    // Logged-in user visits login page → redirect to dashboard
     if ($is_login && is_user_logged_in()) {
         wp_safe_redirect(wsi_dashboard_url());
         exit;
     }
 
-    /* ---- Logged-out user cannot access dashboard ---- */
+    // Logged-out user visits dashboard → redirect to login
     if ($is_dashboard && !is_user_logged_in()) {
         wp_safe_redirect(wsi_login_url());
         exit;
     }
 });
+/*LOGOUT REDIRECT HOOK**/
+add_action('wp_logout', function () {
+    // Use wsi_login_url() if it exists, otherwise fallback to /wsi/login/
+    $redirect_url = function_exists('wsi_login_url') 
+        ? wsi_login_url() 
+        : home_url('/wsi/login/');
+
+    wp_safe_redirect($redirect_url);
+    exit;
+});
+            
+
 
 
 /* ---------------------------------------------------------
@@ -3259,6 +3279,20 @@ add_action('template_redirect', function () {
         exit;
     }
 });
+
+/*
+ * Force login redirect for your custom form
+ */
+add_filter('login_redirect', function ($redirect_to, $requested, $user) {
+
+    if (!empty($_POST['form_id']) && $_POST['form_id'] === 'wsi-loginform') {
+        return wsi_dashboard_url();
+    }
+
+    return $redirect_to;
+
+}, 10, 3);
+
 
 
 
