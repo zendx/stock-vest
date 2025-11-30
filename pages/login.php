@@ -60,6 +60,7 @@ if (is_user_logged_in()) {
 
                                     <!-- REAL WORDPRESS LOGIN FORM -->
                                     <form method="post" action="<?php echo wp_login_url(); ?>">
+
                                         <div class="form-floating mb-3">
                                             <input type="text" class="form-control" name="log" id="emailadd" placeholder="Email or Username" required>
                                             <label for="emailadd">Email Address</label>
@@ -87,10 +88,16 @@ if (is_user_logged_in()) {
                                             </div>
                                         </div>
 
-                                        <input type="hidden" name="redirect_to" value="<?php echo home_url('/dashboard/'); ?>">
+                                        <!-- REQUIRED FIX #1: Identify this as your custom login form -->
+                                        <input type="hidden" name="form_id" value="wsi-loginform">
+
+                                        <!-- REQUIRED FIX #2: Correct redirect destination after login -->
+                                        <input type="hidden" name="redirect_to" value="<?php echo home_url('/wsi/dashboard/'); ?>">
 
                                         <button type="submit" class="btn btn-lg btn-theme w-100 mb-4">Login</button>
+
                                     </form>
+
 
                                 </div>
                             </div>

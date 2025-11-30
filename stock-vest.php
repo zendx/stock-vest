@@ -740,21 +740,26 @@ function wsi_admin_users() {
 
 /* -------------------------------------------------------------------------
     LOGIN REDIRECT FUNCTION
----------------------------------------------------------------------------/
+---------------------------------------------------------------------------*/
 
-// Force redirect after successful login
-add_filter('login_redirect', 'wsi_login_redirect', 100, 3);
-function wsi_login_redirect($redirect_to, $requested_redirect_to, $user) {
+add_action('template_redirect', function () {
 
-    // Only run if login was successful
-    if (is_wp_error($user)) {
-        return $redirect_to;
-    }
+    if (!is_user_logged_in()) return;
 
-    // Always redirect normal users to WSI dashboard
-    return site_url('/wsi/dashboard/');
-}
+    // Current URL
+    $current = trim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), '/');
 
+    // Dashboard URL
+    $dashboard_path = trim(parse_url(wsi_get_dashboard_page_url(), PHP_URL_PATH), '/');
+
+    // Prevent redirect loop
+    if ($current === $dashboard_path) return;
+
+    // Redirect all logged-in users
+    wp_safe_redirect(wsi_get_dashboard_page_url());
+    exit;
+
+});
 
 
 /* -------------------------------------------------------------------------
@@ -3285,29 +3290,67 @@ add_action('template_redirect', function () {
  */
 add_filter('login_redirect', function ($redirect_to, $requested, $user) {
 
-    if (!empty($_POST['form_id']) && $_POST['form_id'] === 'wsi-loginform') {
-        return wsi_dashboard_url();
+    if (
+        isset($_POST['form_id']) &&
+        $_POST['form_id'] === 'wsi-loginform'
+    ) {
+        return wsi_get_dashboard_page_url();
     }
 
     return $redirect_to;
 
-}, 10, 3);
-
-
+}, 9999, 3);
 
 
 /* -------------------------------------------------------
    6. Stay on same page when login fails (front-end forms)
 ------------------------------------------------------- */
-
-
-
 add_action('wp_footer', function() {
+
+    // Show error ONLY on the custom login page
+    $path = trim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), '/');
+    if ($path !== 'wsi/login') return;
+
     if ($msg = get_transient('wsi_login_error')) {
         echo '<div class="wsi-alert wsi-error" style="color:red;margin:10px 0;">' . esc_html($msg) . '</div>';
         delete_transient('wsi_login_error');
     }
 });
+
+/*---------------------------------------------------------------------
+
+    Capture failed login attempts & redirect back to /wsi/login
+
+----------------------------------------------------------------------*/
+
+add_action('wp_login_failed', function($username) {
+
+    // Store error message
+    set_transient('wsi_login_error', 'Invalid username or password.', 30);
+
+    // Redirect back to your custom login page
+    wp_safe_redirect(site_url('/wsi/login'));
+    exit;
+});
+
+/*-----------------------------------------------------------------------------
+
+    Stop WordPress from redirecting to wp-login on authentication errors
+
+------------------------------------------------------------------------------*/
+add_filter('authenticate', function($user, $username, $password) {
+
+    if (!empty($_POST['form_id']) && $_POST['form_id'] === 'wsi-loginform') {
+
+        if (empty($username) || empty($password)) {
+            set_transient('wsi_login_error', 'Username and password are required.', 30);
+            return null;
+        }
+    }
+
+    return $user;
+
+}, 1, 3);
 
 
 // Handle registration from front-end form
