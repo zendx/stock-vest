@@ -1,4 +1,5 @@
 <?php
+
 if (!defined('ABSPATH')) exit;
 $wsi = plugins_url('assets/', __FILE__);
 
