@@ -213,6 +213,20 @@ $default_naira = number_format($min_invest * max(1, $exchange_rate), 2, '.', '')
                                                                 </div>
                                                             </div>
                                                         </form>
+                                                        <script>
+                                                        document.addEventListener("DOMContentLoaded", function () {
+                                                            const url = new URL(window.location.href);
+
+                                                            if (url.searchParams.get("deposit") === "success") {
+                                                                alert("Your deposit was submitted successfully and is pending approval.");
+
+                                                                // remove ?deposit=success from URL
+                                                                url.searchParams.delete("deposit");
+                                                                window.history.replaceState({}, "", url);
+                                                            }
+                                                        });
+                                                        </script>
+
 
                                                     </div>
                                                 </div>
@@ -239,6 +253,66 @@ $default_naira = number_format($min_invest * max(1, $exchange_rate), 2, '.', '')
                                             </div>
                                         </div>
                                     </div>
+                                    <script>
+                                    document.addEventListener("DOMContentLoaded", function () {
+
+                                        const paymentTypeRadios = document.querySelectorAll('input[name="payment_type"]');
+                                        const cryptoSection = document.getElementById("crypto_section");
+                                        const nairaSection = document.getElementById("naira_section");
+
+                                        const amountNaira = document.getElementById("amount_naira");
+                                        const amountUsdDisplay = document.getElementById("amount_usd_display");
+                                        const amountUsdHidden = document.getElementById("amount_usd");
+
+                                        const cryptoAmount = document.getElementById("crypto_amount");
+
+                                        const rate = parseFloat("<?php echo esc_js($opts['exchange_rate'] ?? 1000); ?>");
+
+                                        /* ------------------------------
+                                           HANDLE PAYMENT TYPE SWITCHING
+                                        ------------------------------ */
+                                        paymentTypeRadios.forEach(radio => {
+                                            radio.addEventListener("change", function () {
+                                                if (this.value === "naira") {
+                                                    cryptoSection.style.display = "none";
+                                                    nairaSection.style.display = "block";
+
+                                                    // convert NAIRA → USD
+                                                    const usd = (parseFloat(amountNaira.value) || 0) / rate;
+                                                    amountUsdDisplay.value = usd.toFixed(2);
+                                                    amountUsdHidden.value = usd.toFixed(2);
+                                                } 
+                                                else {
+                                                    nairaSection.style.display = "none";
+                                                    cryptoSection.style.display = "block";
+
+                                                    // set USD directly from crypto field
+                                                    const cryptoValue = parseFloat(cryptoAmount.value) || 0;
+                                                    amountUsdHidden.value = cryptoValue.toFixed(2);
+                                                }
+                                            });
+                                        });
+
+                                        /* ------------------------------
+                                           HANDLE NAIRA CHANGE
+                                        ------------------------------ */
+                                        amountNaira.addEventListener("input", function () {
+                                            const usd = (parseFloat(this.value) || 0) / rate;
+                                            amountUsdDisplay.value = usd.toFixed(2);
+                                            amountUsdHidden.value = usd.toFixed(2);
+                                        });
+
+                                        /* ------------------------------
+                                           HANDLE CRYPTO CHANGE
+                                        ------------------------------ */
+                                        cryptoAmount.addEventListener("input", function () {
+                                            const usd = parseFloat(this.value) || 0;
+                                            amountUsdHidden.value = usd.toFixed(2);
+                                        });
+
+                                    });
+                                    </script>
+
 
 
 
@@ -615,7 +689,7 @@ $default_naira = number_format($min_invest * max(1, $exchange_rate), 2, '.', '')
             });
             </script>
             <!--Deposit Modal-->
-            <div id="deposit-toast" style="
+            <!--div id="deposit-toast" style="
                 display:none;
                 position:fixed;
                 top:20px;
@@ -650,7 +724,7 @@ $default_naira = number_format($min_invest * max(1, $exchange_rate), 2, '.', '')
                 });
 
 
-            </script>
+            </script-->
 
 
         </body>
