@@ -17,7 +17,7 @@ if (is_user_logged_in()) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>COFCO CAPITAL | Login</title>
 
-    <link rel="icon" type="image/png" href="<?php echo $PLUGIN_ASSETS; ?>img/favicon.png">
+    <link rel="icon" type="image/png" href="<?php echo $wsi; ?>img/favicon.png">
 
     <link rel="preconnect" href="https://fonts.googleapis.com/">
     <link rel="preconnect" href="https://fonts.gstatic.com/" crossorigin>
@@ -97,6 +97,26 @@ if (is_user_logged_in()) {
                                         <button type="submit" class="btn btn-lg btn-theme w-100 mb-4">Login</button>
 
                                     </form>
+                                    <script>
+                                        document.addEventListener('DOMContentLoaded', function() {
+                                            const togglePasswordBtn = document.querySelector('.btn-square.btn-link');
+                                            const passwordInput = document.getElementById('passwd');
+                                            const icon = togglePasswordBtn.querySelector('i');
+                                            
+                                            togglePasswordBtn.addEventListener('click', function() {
+                                                // Toggle password visibility
+                                                if (passwordInput.type === 'password') {
+                                                    passwordInput.type = 'text';
+                                                    icon.classList.remove('bi-eye');
+                                                    icon.classList.add('bi-eye-slash');
+                                                } else {
+                                                    passwordInput.type = 'password';
+                                                    icon.classList.remove('bi-eye-slash');
+                                                    icon.classList.add('bi-eye');
+                                                }
+                                            });
+                                        });
+                                    </script>
 
 
                                 </div>
@@ -105,8 +125,7 @@ if (is_user_logged_in()) {
 
                         <footer class="adminuiux-footer mt-auto">
                             <div class="container-fluid text-center">
-                                <span class="small">&copy; <?php echo date('Y'); ?> Creatively designed by
-                                    <a href="https://wa.me/2348031975415" target="_blank">Cyberlife</a> ❤️
+                                <span class="small">&copy; <?php echo date('Y'); ?>.
                                 </span>
                             </div>
                         </footer>
@@ -117,7 +136,7 @@ if (is_user_logged_in()) {
                     <div class="col-12 col-md-6 col-xl-8 p-4 d-none d-md-block">
                         <div class="card adminuiux-card bg-theme-1-space position-relative overflow-hidden h-100">
                             <div class="position-absolute start-0 top-0 h-100 w-100 coverimg opacity-75 z-index-0">
-                                <img src="<?php echo $PLUGIN_ASSETS; ?>img/background-image/background-image-8.png" alt="">
+                                <img src="<?php echo $wsi; ?>img/background-image/background-image-8.png" alt="">
                             </div>
                             <div class="card-body position-relative z-index-1">
                                 <div class="row h-100 d-flex flex-column justify-content-center align-items-center text-center">
@@ -126,19 +145,19 @@ if (is_user_logged_in()) {
                                         <div class="swiper-wrapper">
 
                                             <div class="swiper-slide">
-                                                <img src="<?php echo $PLUGIN_ASSETS; ?>img/investment/slider.png" class="mw-100 mb-3">
+                                                <img src="<?php echo $wsi; ?>img/investment/slider.png" class="mw-100 mb-3">
                                                 <h2 class="text-white mb-3">Manage your Investments easily</h2>
                                                 <p class="lead opacity-75">Personalized space for your financial growth</p>
                                             </div>
 
                                             <div class="swiper-slide">
-                                                <img src="<?php echo $PLUGIN_ASSETS; ?>img/investment/slider.png" class="mw-100 mb-3">
+                                                <img src="<?php echo $wsi; ?>img/investment/slider.png" class="mw-100 mb-3">
                                                 <h2 class="text-white mb-3">Smart investment tools</h2>
                                                 <p class="lead opacity-75">Designed to simplify your workflow</p>
                                             </div>
 
                                             <div class="swiper-slide">
-                                                <img src="<?php echo $PLUGIN_ASSETS; ?>img/investment/slider.png" class="mw-100 mb-3">
+                                                <img src="<?php echo $wsi; ?>img/investment/slider.png" class="mw-100 mb-3">
                                                 <h2 class="text-white mb-3">Easy monitoring</h2>
                                                 <p class="lead opacity-75">Track everything in one place</p>
                                             </div>
@@ -158,6 +177,6 @@ if (is_user_logged_in()) {
         </div>
     </main>
 
-    <script src="<?php echo $PLUGIN_ASSETS; ?>js/investment/investment-auth.js"></script>
+    <script src="<?php echo $wsi; ?>js/investment/investment-auth.js"></script>
 </body>
 </html>

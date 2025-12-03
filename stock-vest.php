@@ -407,6 +407,7 @@
     function wsi_log_tx($uid, $amount, $type = 'info', $desc = '', $meta = []) {
         global $wpdb;
         $t = $wpdb->prefix . 'wsi_transactions';
+        
         $wpdb->insert($t, [
             'user_id' => intval($uid),
             'amount' => round(floatval($amount), 2),
@@ -415,7 +416,35 @@
             'meta' => maybe_serialize($meta),
             'created_at' => current_time('mysql')
         ]);
+        
+        // Send emails based on transaction type (only once, here)
+        if ($wpdb->insert_id) {
+            wsi_trigger_transaction_email($uid, $type, $amount);
+        }
     }
+
+    /**
+     * Trigger emails based on transaction type
+     * This prevents infinite loops by separating email logic from transaction logging
+     */
+    function wsi_trigger_transaction_email($user_id, $type, $amount) {
+        // Map transaction types to email templates
+        $email_map = [
+            'deposit_pending'   => 'email_deposit_received',
+            'deposit_approved'  => 'email_deposit_approved',
+            'withdraw_request'  => 'email_withdraw_received',
+            'withdraw_approved' => 'email_withdraw_approved',
+            'withdraw_declined' => 'email_withdraw_declined',
+            'withdraw_refund'   => 'email_withdraw_declined',
+        ];
+        
+        if (isset($email_map[$type])) {
+            wsi_send_email_template($user_id, $email_map[$type], ['amount' => $amount]);
+        }
+    }
+
+
+
     function wsi_audit($actor, $action, $details = '') {
         global $wpdb;
         $t = $wpdb->prefix . 'wsi_audit';
@@ -798,137 +827,152 @@
     ------------------------------------------------------------------------- */
     function wsi_admin_deposits() {
         if (!current_user_can('manage_options')) return;
-
+        
         global $wpdb;
         $t = $wpdb->prefix . 'wsi_deposits';
-
+        
         // Handle Approve / Decline
         if (!empty($_POST['action_deposit']) && check_admin_referer('wsi_deposits_nonce')) {
-
             $id = intval($_POST['deposit_id']);
             $action = sanitize_text_field($_POST['action_deposit']);
+            
+            error_log("WSI Admin: Processing deposit #$id - Action: $action");
+            
             $dep = $wpdb->get_row($wpdb->prepare("SELECT * FROM $t WHERE id=%d", $id));
-
+            
             if ($dep) {
-
                 if ($action === 'approve') {
-                    $wpdb->update($t, ['status' => 'approved'], ['id' => $id]);
-                    wsi_inc_main($dep->user_id, floatval($dep->amount));
-                    wsi_log_tx($dep->user_id, $dep->amount, 'deposit_approved', "Deposit #{$id} approved");
-                    wsi_apply_referral($dep->user_id, floatval($dep->amount), $id);
-                    wsi_notify_user($dep->user_id, 'Deposit Approved', "Your deposit of $" . number_format($dep->amount, 2) . " was approved.");
-                    wsi_audit(get_current_user_id(), 'approve_deposit', "Approved $id");
-
+                    // Update status
+                    $updated = $wpdb->update(
+                        $t, 
+                        ['status' => 'approved'], 
+                        ['id' => $id],
+                        ['%s'],
+                        ['%d']
+                    );
+                    
+                    if ($updated === false) {
+                        error_log("WSI: Failed to update deposit status - " . $wpdb->last_error);
+                        echo '<div class="notice notice-error"><p>Database error occurred.</p></div>';
+                    } else {
+                        // Credit user balance
+                        wsi_inc_main($dep->user_id, floatval($dep->amount));
+                        
+                        // Log transaction (this will trigger email)
+                        wsi_log_tx($dep->user_id, $dep->amount, 'deposit_approved', "Deposit #{$id} approved by admin");
+                        
+                        // Apply referral bonus
+                        wsi_apply_referral($dep->user_id, floatval($dep->amount), $id);
+                        
+                        // Audit
+                        wsi_audit(get_current_user_id(), 'approve_deposit', "Approved deposit #{$id}");
+                        
+                        echo '<div class="notice notice-success"><p>Deposit approved successfully.</p></div>';
+                        
+                        error_log("WSI Admin: Deposit #$id approved successfully");
+                    }
+                    
                 } elseif ($action === 'decline') {
-                    $wpdb->update($t, ['status' => 'declined'], ['id' => $id]);
-                    wsi_notify_user($dep->user_id, 'Deposit Declined', "Your deposit of $" . number_format($dep->amount, 2) . " was declined.");
-                    wsi_audit(get_current_user_id(), 'decline_deposit', "Declined $id");
+                    $updated = $wpdb->update(
+                        $t, 
+                        ['status' => 'declined'], 
+                        ['id' => $id],
+                        ['%s'],
+                        ['%d']
+                    );
+                    
+                    if ($updated !== false) {
+                        // Log transaction (no email for declined deposits by default)
+                        wsi_log_tx($dep->user_id, $dep->amount, 'deposit_declined', "Deposit #{$id} declined by admin");
+                        
+                        // Audit
+                        wsi_audit(get_current_user_id(), 'decline_deposit', "Declined deposit #{$id}");
+                        
+                        echo '<div class="notice notice-success"><p>Deposit declined.</p></div>';
+                        
+                        error_log("WSI Admin: Deposit #$id declined");
+                    }
                 }
-
-                echo '<div class="notice notice-success"><p>Action executed.</p></div>';
+            } else {
+                echo '<div class="notice notice-error"><p>Deposit not found.</p></div>';
+                error_log("WSI Admin: Deposit #$id not found");
             }
         }
-
-        // Get pending deposits
-        // Get pending deposits only
-        $rows = $wpdb->get_results("SELECT * FROM $t WHERE TRIM(LOWER(status))='pending' ORDER BY created_at DESC");
+        
+        // Get pending deposits with error handling
+        $rows = $wpdb->get_results("SELECT * FROM $t WHERE TRIM(LOWER(status))='pending' ORDER BY created_at DESC LIMIT 100");
+        
+        if ($wpdb->last_error) {
+            error_log("WSI: Error loading deposits - " . $wpdb->last_error);
+            echo '<div class="notice notice-error"><p>Error loading deposits.</p></div>';
+            return;
+        }
+        
         ?>
-
-        <div class="wrap"><h1>Deposits</h1>
-
-        <?php if (empty($rows)) { echo '<p>No deposits found.</p>'; } else { ?>
-
-          <table class="widefat striped">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>User</th>
-                <th>Email</th>
-                <th>Amount</th>
-                <th>Payment Type</th>
-                <th>Wallet</th>
-                <th>Status</th>
-                <th>Created At</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-
-            <tbody>
-            <?php foreach ($rows as $r) {
-                $u = get_userdata($r->user_id);
-            ?>
-              <tr>
-                <td><?php echo intval($r->id); ?></td>
-                <td><?php echo esc_html($u ? $u->user_login : 'User ' . $r->user_id); ?></td>
-                <td><?php echo esc_html($u ? $u->user_email : 'N/A'); ?></td>
-                <td>$<?php echo number_format($r->amount, 2); ?></td>
-                <td><?php echo esc_html(ucfirst($r->payment_type ?? 'Naira')); ?></td>
-                <td><?php echo esc_html($r->crypto_wallet ?? '—'); ?></td>
-                <td><?php echo esc_html(ucfirst($r->status)); ?></td>
-                <td><?php echo esc_html($r->created_at); ?></td>
-                <td>
-                  <form method="post" style="display:inline">
-                      <?php wp_nonce_field('wsi_deposits_nonce'); ?>
-                      <input type="hidden" name="deposit_id" value="<?php echo intval($r->id); ?>">
-                      <button name="action_deposit" value="approve" class="button button-primary">Approve</button>
-                  </form>
-                  <form method="post" style="display:inline">
-                      <?php wp_nonce_field('wsi_deposits_nonce'); ?>
-                      <input type="hidden" name="deposit_id" value="<?php echo intval($r->id); ?>">
-                      <button name="action_deposit" value="decline" class="button">Decline</button>
-                  </form>
-                  <button class="button toggle-details" data-id="<?php echo intval($r->id); ?>">Details</button>
-                </td>
-              </tr>
-
-              <!-- Collapsible Details Row -->
-              <tr class="deposit-details" id="details-<?php echo intval($r->id); ?>" style="display:none; background:#f9f9f9;">
-                <td colspan="9">
-                  <table style="width:100%; border-collapse: collapse;">
-                    <tr>
-                      <td style="padding:5px; border-bottom:1px solid #ddd;"><strong>User ID:</strong> <?php echo intval($r->user_id); ?></td>
-                      <td style="padding:5px; border-bottom:1px solid #ddd;"><strong>Amount:</strong> $<?php echo number_format($r->amount,2); ?></td>
-                      <td style="padding:5px; border-bottom:1px solid #ddd;"><strong>Payment Type:</strong> <?php echo esc_html(ucfirst($r->payment_type ?? 'Naira')); ?></td>
-                      <td style="padding:5px; border-bottom:1px solid #ddd;"><strong>Wallet:</strong> <?php echo esc_html($r->crypto_wallet ?? '—'); ?></td>
-                    </tr>
-                    <tr>
-                      <td style="padding:5px; border-bottom:1px solid #ddd;"><strong>Status:</strong> <?php echo esc_html(ucfirst($r->status)); ?></td>
-                      <td style="padding:5px; border-bottom:1px solid #ddd;"><strong>Created At:</strong> <?php echo esc_html($r->created_at); ?></td>
-                      <td colspan="2" style="padding:5px; border-bottom:1px solid #ddd;"><strong>Notes:</strong> <?php echo esc_html($r->notes ?? '—'); ?></td>
-                    </tr>
-                  </table>
-                </td>
-              </tr>
-
+        <div class="wrap">
+            <h1>Pending Deposits</h1>
+            
+            <?php if (empty($rows)) { ?>
+                <p>No pending deposits.</p>
+            <?php } else { ?>
+                <table class="widefat striped">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>User</th>
+                            <th>Email</th>
+                            <th>Amount (USD)</th>
+                            <th>Amount (Local)</th>
+                            <th>Payment Type</th>
+                            <th>Wallet</th>
+                            <th>Status</th>
+                            <th>Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($rows as $r) {
+                        $u = get_userdata($r->user_id);
+                    ?>
+                        <tr>
+                            <td><?php echo intval($r->id); ?></td>
+                            <td><?php echo esc_html($u ? $u->user_login : 'User #' . $r->user_id); ?></td>
+                            <td><?php echo esc_html($u ? $u->user_email : 'N/A'); ?></td>
+                            <td><strong>$<?php echo number_format($r->amount, 2); ?></strong></td>
+                            <td>
+                                <?php 
+                                $local = !empty($r->amount_local) ? number_format($r->amount_local, 2) : '-';
+                                echo esc_html($local);
+                                ?>
+                            </td>
+                            <td><?php echo esc_html(ucfirst($r->payment_type ?? 'Naira')); ?></td>
+                            <td>
+                                <small><?php echo esc_html($r->crypto_wallet ?? '—'); ?></small>
+                            </td>
+                            <td><?php echo esc_html(ucfirst($r->status)); ?></td>
+                            <td><?php echo esc_html(date('M j, g:i A', strtotime($r->created_at))); ?></td>
+                            <td>
+                                <form method="post" style="display:inline;" onsubmit="return confirm('Approve this deposit?');">
+                                    <?php wp_nonce_field('wsi_deposits_nonce'); ?>
+                                    <input type="hidden" name="deposit_id" value="<?php echo intval($r->id); ?>">
+                                    <button name="action_deposit" value="approve" class="button button-primary">
+                                        ✓ Approve
+                                    </button>
+                                </form>
+                                <form method="post" style="display:inline;margin-left:5px;" onsubmit="return confirm('Decline this deposit?');">
+                                    <?php wp_nonce_field('wsi_deposits_nonce'); ?>
+                                    <input type="hidden" name="deposit_id" value="<?php echo intval($r->id); ?>">
+                                    <button name="action_deposit" value="decline" class="button">
+                                        ✗ Decline
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    <?php } ?>
+                    </tbody>
+                </table>
             <?php } ?>
-            </tbody>
-          </table>
-
-        <?php } ?>
         </div>
-
-        <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            document.querySelectorAll('.toggle-details').forEach(function(btn){
-                btn.addEventListener('click', function(){
-                    var id = this.getAttribute('data-id');
-                    var row = document.getElementById('details-' + id);
-                    if(row.style.display === 'none'){
-                        row.style.display = 'table-row';
-                    } else {
-                        row.style.display = 'none';
-                    }
-                });
-            });
-        });
-        </script>
-
-        <style>
-          .deposit-details td { background: #f4f4f4; }
-          .widefat td, .widefat th { padding: 8px; }
-          .widefat th { background: #f1f1f1; }
-        </style>
-
         <?php
     }
 
@@ -939,102 +983,158 @@
     ------------------------------------------------------------------------- */
     function wsi_admin_withdrawals() {
         if (!current_user_can('manage_options')) return;
+        
         global $wpdb;
         $t = $wpdb->prefix . 'wsi_withdrawals';
-
+        
+        // Handle admin actions
         if (!empty($_POST['action_withdraw']) && check_admin_referer('wsi_withdraws_nonce')) {
             $id = intval($_POST['withdraw_id']);
             $action = sanitize_text_field($_POST['action_withdraw']);
+            
             $row = $wpdb->get_row($wpdb->prepare("SELECT * FROM $t WHERE id=%d", $id));
+            
             if ($row) {
                 if ($action === 'approve') {
-                    $wpdb->update($t, [
-                        'status' => 'approved',
-                        'admin_note' => 'Paid by ' . get_current_user_id()
-                    ], ['id' => $id]);
-
-                    wsi_log_tx($row->user_id, $row->amount, 'withdraw_approved', "Withdrawal #{$id} approved");
-                    wsi_notify_user($row->user_id, 'Withdrawal Approved', "Your withdrawal of $" . number_format($row->amount, 2) . " has been marked paid.");
-                    wsi_audit(get_current_user_id(), 'approve_withdraw', "Approved {$id}");
-
+                    $updated = $wpdb->update(
+                        $t, 
+                        [
+                            'status' => 'approved',
+                            'admin_note' => 'Paid by Admin ID: ' . get_current_user_id() . ' on ' . current_time('mysql')
+                        ], 
+                        ['id' => $id],
+                        ['%s', '%s'],
+                        ['%d']
+                    );
+                    
+                    if ($updated !== false) {
+                        wsi_log_tx($row->user_id, $row->amount, 'withdraw_approved', "Withdrawal #{$id} approved");
+                        wsi_notify_user($row->user_id, 'Withdrawal Approved', "Your withdrawal of $" . number_format($row->amount, 2) . " has been processed and sent.");
+                        wsi_audit(get_current_user_id(), 'approve_withdraw', "Approved withdrawal #{$id} for user #{$row->user_id}");
+                        echo '<div class="notice notice-success"><p>Withdrawal approved successfully.</p></div>';
+                    } else {
+                        error_log('WSI: Failed to approve withdrawal #' . $id . ' - ' . $wpdb->last_error);
+                        echo '<div class="notice notice-error"><p>Failed to approve withdrawal. Check error logs.</p></div>';
+                    }
+                    
                 } elseif ($action === 'decline') {
-
-                    $wpdb->update($t, [
-                        'status' => 'declined',
-                        'admin_note' => 'Declined by ' . get_current_user_id()
-                    ], ['id' => $id]);
-
-                    // refund to holdings/profit instead of main balance
-                    wsi_inc_profit($row->user_id, floatval($row->amount));
-
-                    wsi_log_tx($row->user_id, $row->amount, 'withdraw_refund', 'Withdraw declined, refunded');
-                    wsi_notify_user($row->user_id, 'Withdrawal Declined', 'Your withdrawal was declined and refunded.');
-                    wsi_audit(get_current_user_id(), 'decline_withdraw', "Declined {$id}");
+                    $updated = $wpdb->update(
+                        $t, 
+                        [
+                            'status' => 'declined',
+                            'admin_note' => 'Declined by Admin ID: ' . get_current_user_id() . ' on ' . current_time('mysql')
+                        ], 
+                        ['id' => $id],
+                        ['%s', '%s'],
+                        ['%d']
+                    );
+                    
+                    if ($updated !== false) {
+                        // Refund to profit balance
+                        wsi_inc_profit($row->user_id, floatval($row->amount));
+                        wsi_log_tx($row->user_id, $row->amount, 'withdraw_refund', "Withdrawal #{$id} declined, amount refunded to profit balance");
+                        wsi_notify_user($row->user_id, 'Withdrawal Declined', 'Your withdrawal request was declined and the amount has been refunded to your profit balance.');
+                        wsi_audit(get_current_user_id(), 'decline_withdraw', "Declined withdrawal #{$id} for user #{$row->user_id}");
+                        echo '<div class="notice notice-success"><p>Withdrawal declined and refunded.</p></div>';
+                    } else {
+                        error_log('WSI: Failed to decline withdrawal #' . $id . ' - ' . $wpdb->last_error);
+                        echo '<div class="notice notice-error"><p>Failed to decline withdrawal. Check error logs.</p></div>';
+                    }
                 }
-
-                echo '<div class="notice notice-success"><p>Action executed.</p></div>';
+            } else {
+                echo '<div class="notice notice-error"><p>Withdrawal request not found.</p></div>';
             }
         }
-
-        // Load pending withdrawals
+        
+        // Load pending withdrawals with error handling
         $rows = $wpdb->get_results($wpdb->prepare(
             "SELECT * FROM $t WHERE TRIM(LOWER(status))=%s ORDER BY created_at DESC",
             'pending'
         ));
+        
+        // Check for database errors
+        if ($wpdb->last_error) {
+            error_log('WSI: Error loading withdrawals - ' . $wpdb->last_error);
+            echo '<div class="notice notice-error"><p>Error loading withdrawals. Please check database structure.</p></div>';
+            return;
+        }
         ?>
-        <div class="wrap"><h1>Pending Withdrawals</h1>
-        <?php if (empty($rows)) { echo '<p>No pending withdrawals.</p>'; } else { ?>
-          <table class="widefat striped">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>User</th>
-                <th>Email</th> <!-- added -->
-                <th>Amount</th>
-                <th>Network</th>
-                <th>Wallet</th>
-                <th>When</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-          <?php foreach ($rows as $r) { $u = get_userdata($r->user_id); ?>
-            <tr>
-              <td><?php echo intval($r->id); ?></td>
-
-              <td><?php echo esc_html($u ? $u->user_login : 'User ' . $r->user_id); ?></td>
-
-              <td><?php echo esc_html($u ? $u->user_email : ''); ?></td> <!-- added -->
-
-              <td>$<?php echo number_format($r->amount, 2); ?></td>
-
-              <!-- NETWORK (method) -->
-              <td><?php echo esc_html($r->method); ?></td>
-
-              <!-- WALLET ADDRESS -->
-              <td><pre><?php echo esc_html($r->account_details); ?></pre></td>
-
-              <td><?php echo esc_html($r->created_at); ?></td>
-
-              <td>
-                <form method="post" style="display:inline">
-                    <?php wp_nonce_field('wsi_withdraws_nonce'); ?>
-                    <input type="hidden" name="withdraw_id" value="<?php echo intval($r->id); ?>">
-                    <button name="action_withdraw" value="approve" class="button button-primary">Approve</button>
-                </form>
-
-                <form method="post" style="display:inline">
-                    <?php wp_nonce_field('wsi_withdraws_nonce'); ?>
-                    <input type="hidden" name="withdraw_id" value="<?php echo intval($r->id); ?>">
-                    <button name="action_withdraw" value="decline" class="button">Decline & Refund</button>
-                </form>
-              </td>
-            </tr>
-          <?php } ?>
-          </tbody>
-          </table>
-        <?php } ?>
+        <div class="wrap">
+            <h1>Pending Withdrawals</h1>
+            
+            <?php if (empty($rows)) { ?>
+                <p>No pending withdrawals.</p>
+            <?php } else { ?>
+                <table class="widefat striped">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>User</th>
+                            <th>Email</th>
+                            <th>Amount</th>
+                            <th>Network</th>
+                            <th>Wallet Address</th>
+                            <th>Requested</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($rows as $r) { 
+                        $u = get_userdata($r->user_id);
+                        $method = !empty($r->method) ? esc_html($r->method) : 'N/A';
+                        $wallet = !empty($r->account_details) ? esc_html($r->account_details) : 'Not provided';
+                    ?>
+                        <tr>
+                            <td><?php echo intval($r->id); ?></td>
+                            <td>
+                                <?php echo esc_html($u ? $u->user_login : 'User #' . $r->user_id); ?>
+                                <?php if (!$u) { ?>
+                                    <br><small style="color:red;">⚠ User not found</small>
+                                <?php } ?>
+                            </td>
+                            <td><?php echo esc_html($u ? $u->user_email : 'N/A'); ?></td>
+                            <td><strong>$<?php echo number_format($r->amount, 2); ?></strong></td>
+                            <td><?php echo $method; ?></td>
+                            <td>
+                                <code style="word-break:break-all;display:block;max-width:250px;">
+                                    <?php echo $wallet; ?>
+                                </code>
+                            </td>
+                            <td><?php echo esc_html(date('M j, Y g:i A', strtotime($r->created_at))); ?></td>
+                            <td>
+                                <form method="post" style="display:inline;" onsubmit="return confirm('Approve this withdrawal? This action cannot be undone.');">
+                                    <?php wp_nonce_field('wsi_withdraws_nonce'); ?>
+                                    <input type="hidden" name="withdraw_id" value="<?php echo intval($r->id); ?>">
+                                    <button name="action_withdraw" value="approve" class="button button-primary">
+                                        ✓ Approve
+                                    </button>
+                                </form>
+                                <form method="post" style="display:inline;margin-left:5px;" onsubmit="return confirm('Decline and refund this withdrawal?');">
+                                    <?php wp_nonce_field('wsi_withdraws_nonce'); ?>
+                                    <input type="hidden" name="withdraw_id" value="<?php echo intval($r->id); ?>">
+                                    <button name="action_withdraw" value="decline" class="button">
+                                        ✗ Decline & Refund
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    <?php } ?>
+                    </tbody>
+                </table>
+            <?php } ?>
         </div>
+        
+        <style>
+            .widefat td code {
+                background: #f0f0f0;
+                padding: 4px 8px;
+                border-radius: 3px;
+                font-size: 12px;
+            }
+            .widefat td small {
+                font-size: 11px;
+            }
+        </style>
         <?php
     }
 
@@ -2563,54 +2663,69 @@
     add_action('admin_post_nopriv_wsi_submit_deposit', 'wsi_submit_deposit');
 
     function wsi_submit_deposit() {
-        // Security + login
+        error_log('WSI: Deposit submission started');
+        
         if (!is_user_logged_in()) {
             wp_redirect(site_url('/wsi/login/'));
             exit;
         }
-
+        
         if (!isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'wsi_deposit_nonce')) {
+            error_log('WSI: Deposit nonce failed');
             wp_redirect(site_url('/wsi/deposit/'));
             exit;
         }
-
+        
         global $wpdb;
         $uid = get_current_user_id();
         $t_deposits = $wpdb->prefix . 'wsi_deposits';
-
-        // read inputs
+        
         $amount_usd = floatval($_POST['amount'] ?? $_POST['amount_usd'] ?? 0);
         $payment_type = sanitize_text_field($_POST['payment_type'] ?? 'naira');
         $amount_local = floatval($_POST['amount_naira'] ?? 0);
-
-        // NEW REDIRECT TARGET
+        $crypto_wallet = sanitize_text_field($_POST['crypto_wallet'] ?? '');
+        
         $redirect_to = site_url('/wsi/deposit/');
-
+        
         if ($amount_usd <= 0) {
+            error_log('WSI: Invalid deposit amount');
             wp_redirect($redirect_to);
             exit;
         }
-
-        // insert deposit
+        
+        error_log("WSI: Inserting deposit - User: $uid, Amount: $amount_usd");
+        
+        // Insert deposit
         $inserted = $wpdb->insert(
             $t_deposits,
             [
-                'user_id'    => $uid,
-                'amount'     => $amount_usd,
+                'user_id'      => $uid,
+                'amount'       => $amount_usd,
                 'amount_local' => $amount_local ?: null,
                 'payment_type' => $payment_type,
-                'status'     => 'pending',
-                'created_at' => current_time('mysql')
+                'crypto_wallet' => $crypto_wallet,
+                'status'       => 'pending',
+                'created_at'   => current_time('mysql')
             ],
-            ['%d','%f','%f','%s','%s','%s']
+            ['%d', '%f', '%f', '%s', '%s', '%s', '%s']
         );
-
-        if (!$inserted) {
+        
+        if ($inserted === false) {
+            error_log('WSI: Deposit insert failed - ' . $wpdb->last_error);
             wp_redirect($redirect_to);
             exit;
         }
-
-        // SUCCESS — Redirect with success flag
+        
+        $deposit_id = $wpdb->insert_id;
+        error_log("WSI: Deposit inserted successfully - ID: $deposit_id");
+        
+        // Log transaction (this will trigger email via wsi_trigger_transaction_email)
+        wsi_log_tx($uid, $amount_usd, 'deposit_pending', "Deposit #{$deposit_id} submitted");
+        
+        // Notify admin
+        wsi_notify_admin('New Deposit', "User #{$uid} submitted deposit of $" . number_format($amount_usd, 2));
+        
+        // Redirect with success
         wp_redirect(add_query_arg('deposit', 'success', $redirect_to));
         exit;
     }

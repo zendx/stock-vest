@@ -27,7 +27,7 @@
             </button>
 
             <!-- Logo -->
-            <a class="navbar-brand" href="../">
+            <a class="navbar-brand" href="../dashboard">
                 <img data-bs-img="light" src="<?php echo $wsi; ?>img/logo-main.png" alt="">
                 <img data-bs-img="dark" src="<?php echo $wsi; ?>img/logo-white.png" alt="">
             </a>
