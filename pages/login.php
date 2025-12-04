@@ -107,8 +107,7 @@ if (is_user_logged_in()) {
 
                         <footer class="adminuiux-footer mt-auto">
                             <div class="container-fluid text-center">
-                                <span class="small">&copy; <?php echo date('Y'); ?> Creatively designed by
-                                    <a href="https://wa.me/2348031975415" target="_blank">Cyberlife</a> ❤️
+                                <span class="small">&copy; <?php echo date('Y'); ?> COFCO CAPITAL. All rights reserved.
                                 </span>
                             </div>
                         </footer>

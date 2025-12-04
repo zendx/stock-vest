@@ -403,9 +403,7 @@ $PLUGIN_ASSETS = plugin_dir_url(__FILE__) . 'assets/';
                             <div class="container-fluid text-center">
                                 <span class="small">
                                     Copyright ©
-                                    <?php echo date('Y'); ?>,
-                                    Creatively designed by
-                                    <a href="https://wa.me/2348031975415" target="_blank">Cyberlife</a> ❤️
+                                    <?php echo date('Y'); ?>, COFCO CAPITAL. All rights reserved.
                                 </span>
                             </div>
                         </footer>

@@ -4,7 +4,7 @@
     <div class="container-fluid">
         <div class="row">
             <div class="col-12 col-md col-lg py-2">
-                <span class="small">Copyright @<?php echo date('Y') ?>.
+                <span class="small">Copyright @<?php echo date('Y') ?>, COFCO CAPITAL. All rights reserved.
                 </span>
             </div>
             <div class="col-12 col-md-auto col-lg-auto align-self-center">
