@@ -2,7 +2,8 @@
 if (!defined('ABSPATH')) exit;
 
 // Get the plugin assets URL
-$PLUGIN_ASSETS = plugins_url('assets/', dirname(dirname(__FILE__)) . '/stock-vest.php');
+$plugin_dir = dirname(dirname(__FILE__)); // Go up from /pages to plugin root
+$PLUGIN_ASSETS = plugins_url('assets/', $plugin_dir . '/stock-vest.php');
 
 if (is_user_logged_in()) {
     wp_redirect( home_url('wsi/dashboard') );
@@ -52,57 +53,39 @@ if (is_user_logged_in()) {
                                 <div class="col-11 col-sm-8 col-md-11 col-xl-11 col-xxl-10 login-box">
 
                                     <div class="text-center mb-4">
-                                        <h1 class="mb-2">Welcome 👋</h1>
-                                        <p class="text-secondary">Enter your credentials to login</p>
+                                        <h1 class="mb-2">Forgot Password</h1>
+                                        <p class="text-secondary">
+                                            Enter your email address or username and we’ll send you a link to reset your password.
+                                        </p>
                                     </div>
 
-                                    <?php if (isset($_GET['login']) && $_GET['login'] === 'failed') : ?>
-                                        <div class="alert alert-danger">Invalid username or password</div>
-                                    <?php endif; ?>
+                                    <!-- FORM -->
+                                    <form id="wsi-forgot-password-form" method="post" action="<?php echo esc_url( admin_url('admin-ajax.php') ); ?>">
 
-                                    <!-- REAL WORDPRESS LOGIN FORM -->
-                                    <form method="post" action="<?php echo esc_url( wp_login_url() ); ?>" >
+                                        <?php wp_nonce_field('wsi_forgot_password_nonce'); ?>
+                                        <input type="hidden" name="action" value="wsi_forgot_password">
 
                                         <div class="form-floating mb-3">
-                                            <input type="text" class="form-control" name="log" id="emailadd" placeholder="Email or Username" required>
-                                            <label for="emailadd">Email Address</label>
+                                            <input id="user_login" name="user_login" type="text"
+                                                class="form-control" placeholder="Email or Username" required>
+                                            <label for="user_login">Email or Username</label>
                                         </div>
 
-                                        <div class="position-relative">
-                                            <div class="form-floating mb-3">
-                                                <input type="password" class="form-control" name="pwd" id="passwd" placeholder="Enter your password" required>
-                                                <label for="passwd">Password</label>
-                                            </div>
-                                            <button type="button" class="btn btn-square btn-link text-theme-1 position-absolute end-0 top-0 mt-2 me-2">
-                                                <i class="bi bi-eye"></i>
-                                            </button>
+                                        <button type="submit" class="btn btn-lg btn-theme w-100 mb-3">
+                                            Send Reset Link
+                                        </button>
+
+                                        <div class="text-center">
+                                            <a href="<?php echo esc_url( home_url('/wsi/login/') ); ?>">
+                                                Back to login
+                                            </a>
                                         </div>
-
-                                        <div class="row align-items-center mb-3">
-                                            <div class="col">
-                                                <div class="form-check">
-                                                    <input class="form-check-input" type="checkbox" name="rememberme" id="rememberme" value="forever">
-                                                    <label class="form-check-label" for="rememberme">Remember me</label>
-                                                </div>
-                                            </div>
-                                            <div class="col-auto">
-                                                <a href="../forgot-password">Forgot Password?</a>
-                                            </div>
-                                        </div>
-
-                                        <!-- REQUIRED FIX #1: Identify this as your custom login form -->
-                                        <input type="hidden" name="form_id" value="wsi-loginform">
-
-                                        <!-- REQUIRED FIX #2: Correct redirect destination after login -->
-                                        <input type="hidden" name="redirect_to" value="<?php echo home_url('/wsi/dashboard/'); ?>">
-
-                                        <button type="submit" class="btn btn-lg btn-theme w-100 mb-4">Login</button>
 
                                     </form>
 
-
                                 </div>
                             </div>
+
                         </div>
 
                         <footer class="adminuiux-footer mt-auto">
@@ -161,5 +144,48 @@ if (is_user_logged_in()) {
     </main>
 
     <script src="<?php echo $PLUGIN_ASSETS; ?>js/investment/investment-auth.js"></script>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('wsi-forgot-password-form');
+            if (!form) return;
+            
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const formData = new FormData(form);
+                
+                fetch('<?php echo esc_url(admin_url('admin-ajax.php')); ?>', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    console.log('Response status:', response.status);
+                    return response.text().then(text => {
+                        console.log('Response text:', text);
+                        try {
+                            return JSON.parse(text);
+                        } catch (e) {
+                            console.error('JSON parse error:', e);
+                            throw new Error('Invalid response format: ' + text.substring(0, 100));
+                        }
+                    });
+                })
+                .then(data => {
+                    console.log('Parsed data:', data);
+                    if (data.success) {
+                        alert(data.data.message || 'Check your email for password reset instructions');
+                        window.location.href = '<?php echo esc_url(site_url('/wsi/login/')); ?>';
+                    } else {
+                        alert('Error: ' + (data.data && data.data.message ? data.data.message : 'Failed to process request'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Fetch error:', error);
+                    alert('Error: ' + error.message);
+                });
+            });
+        });
+    </script>
 </body>
 </html>

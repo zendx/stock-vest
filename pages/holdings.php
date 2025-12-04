@@ -1,12 +1,10 @@
 <?php
 
-if ( ! is_user_logged_in() ) {
-    wp_redirect( home_url('/wsi/login/') );
-    exit();
-}
-
 if (!defined('ABSPATH')) exit;
-$wsi = plugins_url('assets/', __FILE__);
+
+// Get the plugin assets URL
+$PLUGIN_ASSETS = plugins_url('assets/', dirname(dirname(__FILE__)) . '/stock-vest.php');
+$wsi = $PLUGIN_ASSETS;
 
 global $wpdb;
 

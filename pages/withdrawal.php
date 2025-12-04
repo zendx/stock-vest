@@ -1,12 +1,14 @@
 <?php
 
-if ( ! is_user_logged_in() ) {
-    wp_redirect( home_url('/wsi/login/') );
-    exit();
-}
-
 if (!defined('ABSPATH')) exit;
-$wsi = plugins_url('assets/', __FILE__);
+
+// Get the plugin assets URL and directory
+$PLUGIN_ASSETS = plugins_url('assets/', dirname(dirname(__FILE__)) . '/stock-vest.php');
+$PLUGIN_DIR = dirname(dirname(__FILE__));
+$wsi = $PLUGIN_ASSETS;
+
+// Authentication check moved to plugin template_redirect hook
+// If user is here, they're already authenticated
 
 ?>
 <!DOCTYPE html>
@@ -20,7 +22,7 @@ $wsi = plugins_url('assets/', __FILE__);
     <meta http-equiv="x-ua-compatible" content="ie=edge">
 
     <title>COFCO CAPITAL | User Withdrawal</title>
-    <link rel="icon" type="image/png" href="assets/img/favicon.png">
+    <link rel="icon" type="image/png" href="<?php echo $PLUGIN_ASSETS; ?>img/favicon.png">
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com/">
@@ -40,7 +42,9 @@ $wsi = plugins_url('assets/', __FILE__);
 
 <body class="main-bg main-bg-opac main-bg-blur adminuiux-sidebar-fill-white adminuiux-sidebar-boxed  theme-blue roundedui" data-theme="theme-blue" data-sidebarfill="adminuiux-sidebar-fill-white" data-bs-spy="scroll" data-bs-target="#list-example" data-bs-smooth-scroll="true" tabindex="0">
     <!-- Pageloader -->
-<?php include_once "assets/inc/header.php" ?>
+     <?php
+    include_once plugin_dir_path(__FILE__) . 'assets/inc/header.php';
+    ?>
 
                     <main class="adminuiux-content has-sidebar" onclick="contentClick()">
                         <!-- body content of pages -->
@@ -90,8 +94,7 @@ $wsi = plugins_url('assets/', __FILE__);
 
                                                 <div class="card-body">
 
-                                                    <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
-                                                        <input type="hidden" name="redirect_back" value="<?php echo esc_url( $_SERVER['REQUEST_URI'] ); ?>">
+                                                    <form method="post" action="<?php echo esc_url(admin_url('admin-ajax.php')); ?>" id="wsi-withdrawal-form">
                                                         <input type="hidden" name="action" value="wsi_submit_withdraw">
                                                         <?php wp_nonce_field('wsi_withdraw_nonce'); ?>
 
@@ -151,7 +154,7 @@ $wsi = plugins_url('assets/', __FILE__);
                                         <div class="col-12 col-lg-4 mb-4">
                                             <div class="card adminuiux-card position-relative overflow-hidden bg-theme-1 h-100">
                                                 <div class="position-absolute top-0 start-0 h-100 w-100 z-index-0 coverimg opacity-50">
-                                                    <img src="assets/img/modern-ai-image/flamingo-4.jpg" alt="">
+                                                    <img src="<?php echo $PLUGIN_ASSETS; ?>img/modern-ai-image/flamingo-4.jpg" alt="">
                                                 </div>
                                                 <div class="card-body z-index-1">
                                                     <div class="avatar avatar-60 rounded bg-white-opacity text-white mb-4">
@@ -178,7 +181,47 @@ $wsi = plugins_url('assets/', __FILE__);
             </div>
 
             <!-- page footer -->
-            <?php include_once "assets/inc/footer.php" ?>
+            <?php
+            include_once plugin_dir_path(__FILE__) . 'assets/inc/footer.php';
+            ?>
+
+            <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                const form = document.getElementById('wsi-withdrawal-form');
+                if (!form) return;
+                
+                form.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    
+                    const formData = new FormData(form);
+                    
+                    fetch('<?php echo esc_js(admin_url('admin-ajax.php')); ?>', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.text())
+                    .then(text => {
+                        try {
+                            const data = JSON.parse(text);
+                            if (data.success) {
+                                alert(data.data.message || 'Withdrawal request submitted successfully');
+                                window.location.href = '<?php echo home_url('/wsi/dashboard/'); ?>';
+                            } else {
+                                alert('Error: ' + (data.data.message || 'Failed to process request'));
+                            }
+                        } catch(e) {
+                            console.error('JSON parse error:', e);
+                            console.error('Response text:', text);
+                            alert('Error: Failed to process request');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Fetch error:', error);
+                        alert('Error: ' + error.message);
+                    });
+                });
+            });
+            </script>
                     </body>
 
 </html>

