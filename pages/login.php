@@ -2,7 +2,7 @@
 if (!defined('ABSPATH')) exit;
 
 // Get the plugin assets URL
-$PLUGIN_ASSETS = plugins_url('assets/', dirname(dirname(__FILE__)) . '/stock-vest.php');
+$PLUGIN_ASSETS = plugins_url('pages/assets/', dirname(dirname(__FILE__)) . '/stock-vest.php');
 
 if (is_user_logged_in()) {
     wp_redirect( home_url('wsi/dashboard') );
@@ -73,8 +73,8 @@ if (is_user_logged_in()) {
                                                 <input type="password" class="form-control" name="pwd" id="passwd" placeholder="Enter your password" required>
                                                 <label for="passwd">Password</label>
                                             </div>
-                                            <button type="button" class="btn btn-square btn-link text-theme-1 position-absolute end-0 top-0 mt-2 me-2">
-                                                <i class="bi bi-eye"></i>
+                                            <button type="button" id="toggle-password" class="btn btn-square btn-link text-theme-1 position-absolute end-0 top-0 mt-2 me-2" aria-label="Show password">
+                                                <i class="bi bi-eye" aria-hidden="true"></i>
                                             </button>
                                         </div>
 
@@ -161,5 +161,25 @@ if (is_user_logged_in()) {
     </main>
 
     <script src="<?php echo $PLUGIN_ASSETS; ?>js/investment/investment-auth.js"></script>
+    <script>
+        // Simple password visibility toggle for the login form
+        document.addEventListener('DOMContentLoaded', () => {
+            const passwordInput = document.getElementById('passwd');
+            const toggleButton = document.getElementById('toggle-password');
+            const icon = toggleButton?.querySelector('i');
+
+            if (!passwordInput || !toggleButton) return;
+
+            toggleButton.addEventListener('click', () => {
+                const isHidden = passwordInput.type === 'password';
+                passwordInput.type = isHidden ? 'text' : 'password';
+                toggleButton.setAttribute('aria-label', isHidden ? 'Hide password' : 'Show password');
+                if (icon) {
+                    icon.classList.toggle('bi-eye', !isHidden);
+                    icon.classList.toggle('bi-eye-slash', isHidden);
+                }
+            });
+        });
+    </script>
 </body>
 </html>

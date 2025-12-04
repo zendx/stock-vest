@@ -3,7 +3,7 @@
 if (!defined('ABSPATH')) exit;
 
 // Get the plugin assets URL
-$PLUGIN_ASSETS = plugins_url('assets/', dirname(dirname(__FILE__)) . '/stock-vest.php');
+$PLUGIN_ASSETS = plugins_url('pages/assets/', dirname(dirname(__FILE__)) . '/stock-vest.php');
 $wsi = $PLUGIN_ASSETS;
 
 ?>
@@ -146,6 +146,36 @@ $wsi = $PLUGIN_ASSETS;
                                 return esc_url(add_query_arg($q, remove_query_arg('paged')));
                             };
                             ?>
+                            <style>
+                                .wsi-tx-list { display: flex; flex-direction: column; gap: 10px; }
+                                .wsi-tx-card {
+                                    border: 1px solid #f1f1f1;
+                                    border-radius: 14px;
+                                    padding: 10px 12px;
+                                    background: #fff;
+                                    box-shadow: 0 6px 14px rgba(0,0,0,0.04);
+                                }
+                                .wsi-tx-card summary {
+                                    list-style: none;
+                                    cursor: pointer;
+                                }
+                                .wsi-tx-card summary::-webkit-details-marker { display: none; }
+                                .wsi-tx-card summary > div {
+                                    display: flex;
+                                    align-items: center;
+                                    justify-content: space-between;
+                                    gap: 12px;
+                                }
+                                .wsi-tx-type { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+                                .wsi-tx-date { font-size: 12px; color: #6b7280; }
+                                .wsi-tx-amount { font-weight: 800; color: #0f172a; }
+                                .wsi-amount-up { color: #0a8f3e; }
+                                .wsi-amount-down { color: #c0392b; }
+                                .wsi-tx-body { margin-top: 10px; padding-top: 10px; border-top: 1px solid #f1f1f1; }
+                                .wsi-tx-row { display: flex; justify-content: space-between; margin-bottom: 6px; }
+                                .wsi-tx-label { color: #9ca3af; font-size: 12px; }
+                                .wsi-tx-text { font-size: 13px; color: #111827; }
+                            </style>
 
                             <!-- ========================= -->
                             <!-- FILTER PANEL (COLLAPSIBLE) -->
@@ -196,66 +226,60 @@ $wsi = $PLUGIN_ASSETS;
                                 </div>
 
 
-                                <!-- ========================= -->
-                                <!-- DATA TABLE WRAPPER -->
-                                <!-- ========================= -->
                                 <div class="card adminuiux-card mt-4 mb-0">
                                     <div class="card-body">
 
-                                        <table id="dataTable" class="table w-100 nowrap">
-                                            <thead>
-                                            <tr>
-                                                <th>Date</th>
-                                                <th>Amount</th>
-                                                <th>Type</th>
-                                                <th>Description</th>
-                                                <th>Status</th>
-                                            </tr>
-                                            </thead>
+                                        <p class="text-secondary small mb-3">Tap any transaction to view full details.</p>
 
-                                            <tbody>
-
-                                            <?php if ($txs): ?>
-                                                <?php foreach ($txs as $t): ?>
-
-                                                    <?php
-                                                    // Color status based on type
+                                        <?php if ($txs): ?>
+                                            <div class="wsi-tx-list">
+                                                <?php foreach ($txs as $t):
                                                     $badge = 'success';
                                                     if ($t->type === 'withdraw_request') $badge = 'warning';
                                                     if ($t->type === 'smart_farm_interest') $badge = 'info';
                                                     if ($t->type === 'reinvest') $badge = 'primary';
-                                                    ?>
 
-                                                    <tr>
-                                                        <td>
-                                                            <p class="mb-0"><?php echo esc_html($t->created_at); ?></p>
-                                                        </td>
-
-                                                        <td><h6>$<?php echo number_format($t->amount, 2); ?></h6></td>
-
-                                                        <td>
-                                                            <span class="badge badge-light rounded-pill text-bg-<?php echo $badge; ?>">
-                                                                <?php echo esc_html($t->type); ?>
-                                                            </span>
-                                                        </td>
-
-                                                        <td><?php echo esc_html($t->description); ?></td>
-
-                                                        <td>
-                                                            <a href="#" class="btn btn-square btn-link" data-bs-toggle="tooltip" title="View"><i class="bi bi-eye"></i></a>
-                                                        </td>
-                                                    </tr>
-
+                                                    $amount_class = ($t->amount >= 0) ? 'wsi-amount-up' : 'wsi-amount-down';
+                                                    $desc = trim($t->description) !== '' ? $t->description : 'No description';
+                                                ?>
+                                                <details class="wsi-tx-card">
+                                                    <summary>
+                                                        <div>
+                                                            <div class="wsi-tx-type">
+                                                                <span class="badge badge-light rounded-pill text-bg-<?php echo $badge; ?>">
+                                                                    <?php echo esc_html($t->type); ?>
+                                                                </span>
+                                                                <span class="wsi-tx-date"><?php echo esc_html($t->created_at); ?></span>
+                                                            </div>
+                                                            <div class="wsi-tx-amount <?php echo $amount_class; ?>">
+                                                                $<?php echo number_format($t->amount, 2); ?>
+                                                            </div>
+                                                        </div>
+                                                    </summary>
+                                                    <div class="wsi-tx-body">
+                                                        <div class="wsi-tx-row">
+                                                            <span class="wsi-tx-label">Description</span>
+                                                            <span class="wsi-tx-text"><?php echo esc_html($desc); ?></span>
+                                                        </div>
+                                                        <div class="wsi-tx-row">
+                                                            <span class="wsi-tx-label">ID</span>
+                                                            <span class="wsi-tx-text"><?php echo intval($t->id); ?></span>
+                                                        </div>
+                                                        <div class="wsi-tx-row">
+                                                            <span class="wsi-tx-label">Date</span>
+                                                            <span class="wsi-tx-text"><?php echo esc_html($t->created_at); ?></span>
+                                                        </div>
+                                                        <div class="wsi-tx-row">
+                                                            <span class="wsi-tx-label">Amount</span>
+                                                            <span class="wsi-tx-text <?php echo $amount_class; ?>">$<?php echo number_format($t->amount, 2); ?></span>
+                                                        </div>
+                                                    </div>
+                                                </details>
                                                 <?php endforeach; ?>
-
-                                            <?php else: ?>
-                                                <tr>
-                                                    <td colspan="5" class="text-center">No transactions found.</td>
-                                                </tr>
-                                            <?php endif; ?>
-
-                                            </tbody>
-                                        </table>
+                                            </div>
+                                        <?php else: ?>
+                                            <p class="text-center mb-0">No transactions found.</p>
+                                        <?php endif; ?>
 
                                     </div>
                                 </div>

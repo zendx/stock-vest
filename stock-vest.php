@@ -456,8 +456,8 @@
         // Skip email sending during AJAX requests to prevent timeout
         // Email will be sent via background task or admin can send manually
         $is_ajax = defined('DOING_AJAX') && DOING_AJAX;
-        // Allow critical withdrawal statuses even during AJAX (admin approval is AJAX-based)
-        $ajax_allowed = ['withdraw_approved', 'withdraw_declined'];
+        // Allow critical statuses during AJAX (front-end deposit/withdraw are AJAX)
+        $ajax_allowed = ['withdraw_approved', 'withdraw_declined', 'withdraw_request', 'deposit_pending', 'deposit_declined'];
         if ($is_ajax && !in_array($type, $ajax_allowed, true)) {
             error_log('WSI: Skipping email during AJAX request (type=' . $type . ') for user=' . $user_id);
             return;
@@ -467,6 +467,7 @@
         $email_map = [
             'deposit_pending'   => 'email_deposit_received',
             'deposit_approved'  => 'email_deposit_approved',
+            'deposit_declined'  => 'email_deposit_declined',
             'withdraw_request'  => 'email_withdraw_received',
             'withdraw_approved' => 'email_withdraw_approved',
             'withdraw_declined' => 'email_withdraw_declined',
@@ -498,9 +499,31 @@
     }
     function wsi_notify_user($uid, $subject, $message) {
         $opts = wsi_get_opts();
-        if (empty($opts['email_notifications'])) return;
         $u = get_userdata($uid);
-        if ($u && is_email($u->user_email)) wp_mail($u->user_email, $subject, $message);
+
+        // Send email if enabled
+        if (!empty($opts['email_notifications']) && $u && is_email($u->user_email)) {
+            wp_mail($u->user_email, $subject, $message);
+        }
+
+        // Store in-app notification
+        $notifications = get_user_meta($uid, 'wsi_notifications', true);
+        if (!is_array($notifications)) {
+            $notifications = [];
+        }
+
+        $notifications[] = [
+            'title'   => $subject,
+            'body'    => $message,
+            'type'    => 'info',
+            'time'    => current_time('timestamp'),
+            'read'    => false,
+        ];
+
+        // Keep only the latest 30
+        $notifications = array_slice($notifications, -30);
+
+        update_user_meta($uid, 'wsi_notifications', $notifications);
     }
 
     /* -------------------------------------------------------------------------
@@ -583,6 +606,11 @@
         }
         wsi_ensure_invite_code($user_id);
     }
+
+    // Send welcome email using admin template (if configured)
+    add_action('user_register', function($user_id) {
+        wsi_send_email_template($user_id, 'email_registration_welcome');
+    }, 20, 1);
 
     add_action('template_redirect', function () {
 
@@ -2930,22 +2958,9 @@
     // Log transaction
     wsi_log_tx($uid, $amount, 'withdraw_request', 'Withdrawal requested');
     wsi_audit($uid, 'withdraw_request', "Requested $amount");
-    // Avoid slow mail during AJAX requests; notify admin only on non-AJAX
-    if (!$is_ajax) {
-        wsi_notify_admin('Withdrawal Requested', "User #{$uid} requested withdrawal of $" . number_format($amount, 2));
-    }
-
-    /* ------------------------------------------------------
-       ✔️ FIXED HERE — Correct user email function
-    ------------------------------------------------------- */
-    // Avoid slow email during AJAX; send only on non-AJAX requests
-    if (!$is_ajax) {
-        wsi_send_user_email(
-            $uid,
-            'Withdrawal Requested',
-            "Your withdrawal request of $" . number_format($amount, 2) . " has been submitted and is now pending approval."
-        );
-    }
+    // Notify admin and user even during AJAX (front-end uses AJAX)
+    wsi_notify_admin('Withdrawal Requested', "User #{$uid} requested withdrawal of $" . number_format($amount, 2));
+    wsi_send_email_template($uid, 'email_withdraw_received', ['amount' => $amount]);
 
     // Return response
     if ($is_ajax) {

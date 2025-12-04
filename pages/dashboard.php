@@ -3,7 +3,7 @@
 if (!defined('ABSPATH')) exit;
 
 // Get the plugin assets URL
-$PLUGIN_ASSETS = plugins_url('assets/', dirname(dirname(__FILE__)) . '/stock-vest.php');
+$PLUGIN_ASSETS = plugins_url('pages/assets/', dirname(dirname(__FILE__)) . '/stock-vest.php');
 $wsi = $PLUGIN_ASSETS;
 
 // Get current user
@@ -125,7 +125,7 @@ $available_balance = number_format($available_balance, 2);
                                                         </div>
                                                         <div class="col">
                                                             <h4 class="fw-medium">$<?php echo $profit_income; ?></h4>
-                                                            <p class="text-secondary">Profit Income<span class="text-success fs-14"><i class="bi bi-arrow-up"></i> 11.5%</span></p>
+                                                            <p class="text-secondary">Profit Income<span class="text-success fs-14"></i> </span></p>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -140,7 +140,7 @@ $available_balance = number_format($available_balance, 2);
                                                         </div>
                                                         <div class="col">
                                                             <h4 class="fw-medium">$<?php echo $available_balance; ?></h4>
-                                                            <p class="text-secondary">Available Balance <span class="text-success fs-14"><i class="bi bi-arrow-up"></i> 11.5%</span></p>
+                                                            <p class="text-secondary">Available Balance <span class="text-success fs-14"></i> </span></p>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -161,7 +161,7 @@ $available_balance = number_format($available_balance, 2);
                                                         </div>
                                                         <div class="col">
                                                             <h4 class="fw-medium">$<?php echo $assets; ?></h4>
-                                                            <p class="text-secondary">Total Assets <span class="text-success fs-14"><i class="bi bi-arrow-up"></i> 25.35%</span></p>
+                                                            <p class="text-secondary">Total Assets <span class="text-success fs-14"></i> </span></p>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -176,7 +176,7 @@ $available_balance = number_format($available_balance, 2);
                                                         </div>
                                                         <div class="col">
                                                             <h4 class="fw-medium">$<?php echo $net_margin; ?></h4>
-                                                            <p class="text-secondary">Net Margin <span class="text-success fs-14"><i class="bi bi-arrow-up"></i> 56.51%</span></p>
+                                                            <p class="text-secondary">Net Margin <span class="text-success fs-14"></i> </span></p>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -214,7 +214,7 @@ $available_balance = number_format($available_balance, 2);
                                                     <div class="card adminuiux-card bg-theme-1">
                                                         <div class="card-body z-index-1">
                                                             <h4 class="fw-medium text">$5560.50</h4>
-                                                            <p class="opacity-75">Income <span class="fs-14"><i class="bi bi-arrow-up"></i> 11.5%</span></p>
+                                                            <p class="opacity-75">Income <span class="fs-14"></i> </span></p>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -222,7 +222,7 @@ $available_balance = number_format($available_balance, 2);
                                                     <div class="card adminuiux-card bg-theme-1-subtle">
                                                         <div class="card-body z-index-1">
                                                             <h4 class="fw-medium">$5560.50</h4>
-                                                            <p class="text-secondary">Expense <span class="text-success fs-14"><i class="bi bi-arrow-up"></i> 11.5%</span></p>
+                                                            <p class="text-secondary">Expense <span class="text-success fs-14"></i> </span></p>
                                                         </div>
                                                     </div>
                                                 </div>

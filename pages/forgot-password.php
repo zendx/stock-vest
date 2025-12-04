@@ -3,7 +3,7 @@ if (!defined('ABSPATH')) exit;
 
 // Get the plugin assets URL
 $plugin_dir = dirname(dirname(__FILE__)); // Go up from /pages to plugin root
-$PLUGIN_ASSETS = plugins_url('assets/', $plugin_dir . '/stock-vest.php');
+$PLUGIN_ASSETS = plugins_url('pages/assets/', $plugin_dir . '/stock-vest.php');
 
 if (is_user_logged_in()) {
     wp_redirect( home_url('wsi/dashboard') );

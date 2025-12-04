@@ -3,7 +3,7 @@
 if (!defined('ABSPATH')) exit;
 
 // Get the plugin assets URL and directory
-$PLUGIN_ASSETS = plugins_url('assets/', dirname(dirname(__FILE__)) . '/stock-vest.php');
+$PLUGIN_ASSETS = plugins_url('pages/assets/', dirname(dirname(__FILE__)) . '/stock-vest.php');
 $PLUGIN_DIR = dirname(dirname(__FILE__));
 $wsi = $PLUGIN_ASSETS;
 

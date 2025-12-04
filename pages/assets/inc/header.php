@@ -1,3 +1,51 @@
+<?php
+$user_id = get_current_user_id();
+$current_user = wp_get_current_user();
+$first_name = trim(get_user_meta($user_id, 'first_name', true));
+$last_name = trim(get_user_meta($user_id, 'last_name', true));
+$full_name = trim($first_name . ' ' . $last_name);
+
+if ($full_name === '') {
+    $full_name = trim($current_user->display_name);
+}
+
+if ($full_name === '') {
+    $full_name = trim($current_user->user_login);
+}
+
+$display_name = $first_name !== '' ? $first_name : $full_name;
+
+if (!function_exists('wsi_get_user_initials')) {
+    function wsi_get_user_initials($name)
+    {
+        $name = trim($name);
+        $initials = '';
+
+        foreach (preg_split('/\s+/', $name) as $part) {
+            if ($part === '') {
+                continue;
+            }
+            $initials .= strtoupper(substr($part, 0, 1));
+            if (strlen($initials) >= 2) {
+                break;
+            }
+        }
+
+        if ($initials === '' && $name !== '') {
+            $initials = strtoupper(substr($name, 0, 2));
+        }
+
+        return $initials !== '' ? $initials : '?';
+    }
+}
+
+$user_initials = wsi_get_user_initials($full_name);
+$assets = wsi_get_main($user_id);
+if (empty($assets)) {
+    $assets = 0;
+}
+?>
+
 <!-- Page Loader -->
 <div class="pageloader">
     <div class="container h-100">
@@ -42,24 +90,24 @@
                 </button>
 
                 <!-- Notifications -->
-                <div class="dropdown d-inline-block">
+                <!--div class="dropdown d-inline-block">
                     <button class="btn btn-link btn-square btn-icon btn-link-header dropdown-toggle no-caret" type="button" data-bs-toggle="dropdown">
                         <i data-feather="bell"></i>
-                        <span class="position-absolute top-0 end-0 badge rounded-pill bg-danger p-1">
+                            <span class="position-absolute top-0 end-0 badge rounded-pill bg-danger p-1">
                             <small>9+</small>
-                        </span>
+                            </span>
                     </button>
 
                     <ul class="dropdown-menu dropdown-menu-end notification-dd sm-mi-95px">
                         <li>
                             <a class="dropdown-item p-2" href="#">
-                                <div class="row gx-3">
-                                    <div class="col-auto">
+                                            <div class="row gx-3">
+                                                <div class="col-auto">
                                         <figure class="avatar avatar-40 rounded-circle bg-pink">
                                             <i class="bi bi-gift text-white"></i>
-                                        </figure>
-                                    </div>
-                                    <div class="col">
+                                                    </figure>
+                                                </div>
+                                                <div class="col">
                                         <p class="mb-2 small">
                                             Congratulations! Your property <span class="fw-bold">#H10215</span> has reached 1000 views.
                                         </p>
@@ -69,8 +117,8 @@
                                             </span>
                                             <span class="col-auto small opacity-75">1:00 am</span>
                                         </span>
-                                    </div>
-                                </div>
+                                            </div>
+                                        </div>
                             </a>
                         </li>
 
@@ -80,15 +128,15 @@
                             </button>
                         </li>
                     </ul>
-                </div>
+                </div-->
 
                 <!-- Profile dropdown -->
                 <div class="dropdown d-inline-block">
                     <a class="dropdown-toggle btn btn-link btn-square btn-link-header style-none no-caret px-0" id="userprofiledd" data-bs-toggle="dropdown">
                         <div class="row gx-0 d-inline-flex">
                             <div class="col-auto align-self-center">
-                                <figure class="avatar avatar-28 rounded-circle coverimg">
-                                    <img src="<?php echo $wsi; ?>img/modern-ai-image/user-6.jpg" alt="">
+                                <figure class="avatar avatar-28 rounded-circle d-inline-flex align-items-center justify-content-center bg-primary text-white fw-bold">
+                                    <span><?php echo esc_html($user_initials); ?></span>
                                 </figure>
                             </div>
                         </div>
@@ -99,29 +147,14 @@
                         <div class="bg-theme-1-space rounded py-3 mb-3 dropdown-dontclose">
                             <div class="row gx-0">
                                 <div class="col-auto px-3">
-                                    <figure class="avatar avatar-50 rounded-circle coverimg">
-                                        <img src="<?php echo $wsi; ?>img/modern-ai-image/user-6.jpg" alt="">
+                                    <figure class="avatar avatar-50 rounded-circle d-inline-flex align-items-center justify-content-center bg-primary text-white fw-bold">
+                                        <span><?php echo esc_html($user_initials); ?></span>
                                     </figure>
                                 </div>
-                                <?php
-                                $user_id = get_current_user_id();
-
-                                // Get first name
-                                $first_name = get_user_meta($user_id, 'first_name', true);
-                                if (empty($first_name)) {
-                                    $first_name = wp_get_current_user()->display_name;
-                                }
-
-                                // Total assets
-                                $assets = wsi_get_main($user_id);
-                                if (empty($assets)) {
-                                    $assets = 0;
-                                }
-                                ?>
 
                                 <div class="col align-self-center">
                                     <p class="mb-1 fw-medium">
-                                        <?php echo esc_html($first_name); ?>
+                                        <?php echo esc_html($display_name); ?>
                                     </p>
                                     <p>
                                         <i class="bi bi-wallet2 me-2"></i>
@@ -150,7 +183,7 @@
                                 <i data-feather="settings" class="avatar avatar-18 me-1"></i> Account Settings
                             </a>
 
-                            <a class="dropdown-item theme-red" href="<?php echo esc_url( wp_logout_url( home_url('/') ) ); ?>">
+                            <a class="dropdown-item theme-red" href="<?php echo esc_url( wp_logout_url( home_url('/wsi/login/') ) ); ?>">
                                 <i data-feather="power" class="avatar avatar-18 me-1"></i> Logout
                             </a>
                         </div>

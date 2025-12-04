@@ -3,7 +3,7 @@
 if (!defined('ABSPATH')) exit;
 
 // Get the plugin assets URL
-$PLUGIN_ASSETS = plugins_url('assets/', dirname(dirname(__FILE__)) . '/stock-vest.php');
+$PLUGIN_ASSETS = plugins_url('pages/assets/', dirname(dirname(__FILE__)) . '/stock-vest.php');
 $wsi = $PLUGIN_ASSETS;
 
 $opts = function_exists('wsi_get_opts') ? wsi_get_opts() : [];
@@ -115,8 +115,8 @@ $default_naira = number_format($min_invest * max(1, $exchange_rate), 2, '.', '')
 
                                                 <div class="card adminuiux-card">
                                                     <div class="card-header">
-                                                        <h5>Create Deposit @ 7.00%</h5>
-                                                        <p class="text-secondary">Start your money growing with smart investment</p>
+                                                        <h5>Create Deposit</h5>
+                                                        <p class="text-secondary">Start growing your wealth through advanced DeFi-agriculture and smart investment solutions.</p>
                                                     </div>
 
                                                     <div class="card-body">
@@ -135,7 +135,7 @@ $default_naira = number_format($min_invest * max(1, $exchange_rate), 2, '.', '')
 
                                                             <!-- Payment Type -->
                                                             <div class="mb-3">
-                                                                <label><input type="radio" name="payment_type" value="naira" checked> Naira Payment</label>
+                                                                <label><input type="radio" name="payment_type" value="naira" checked> Bank Payment</label>
                                                                 <label class="ms-3"><input type="radio" name="payment_type" value="crypto"> Crypto Payment</label>
                                                             </div>
 
@@ -245,9 +245,9 @@ $default_naira = number_format($min_invest * max(1, $exchange_rate), 2, '.', '')
                                                         <div class="avatar avatar-60 rounded bg-white-opacity text-white mb-4">
                                                             <i class="bi bi-tags h4"></i>
                                                         </div>
-                                                        <h2>Great Offer!</h2>
-                                                        <h4 class="fw-medium">You have <b>LOAN</b> of <b>$ 800000.00</b> offer from HSBCD Bank</h4>
-                                                        <p class="mb-4">No documentation required...</p>
+                                                        <h2>Crypto Deposit</h2>
+                                                        <h4 class="fw-medium">Seamlessly fund your <b>COFCO Capital</b> account by selecting from our range of supported <b>cryptocurrencies </b></h4>
+                                                        <p class="mb-4">for a secure and efficient deposit experience</p>
                                                         <button class="btn btn-light my-1">Apply Now</button>
                                                     </div>
                                                 </div>

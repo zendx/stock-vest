@@ -3,7 +3,7 @@
 if (!defined('ABSPATH')) exit;
 
 // Get the plugin assets URL
-$PLUGIN_ASSETS = plugins_url('assets/', dirname(dirname(__FILE__)) . '/stock-vest.php');
+$PLUGIN_ASSETS = plugins_url('pages/assets/', dirname(dirname(__FILE__)) . '/stock-vest.php');
 $wsi = $PLUGIN_ASSETS;
 
 global $wpdb;
@@ -95,8 +95,118 @@ $holdings = $wpdb->get_results(
             display: block;
         }
 
-        /* Ensure dropdown stays aligned inside table */
-        .no-caret { text-decoration: none; }
+        /* New card layout for holdings */
+        .wsi-holdings-list {
+            max-width: 760px;
+            margin: 0 auto 40px;
+        }
+        .wsi-holding-card {
+            background: #fff;
+            border-radius: 18px;
+            padding: 16px;
+            margin-bottom: 14px;
+            box-shadow: 0 10px 22px rgba(0,0,0,0.04);
+            border: 1px solid #f1f1f1;
+        }
+        .wsi-holding-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+        .wsi-holding-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .wsi-holding-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 14px;
+            background: linear-gradient(135deg, #f5f5f7, #e9ecf3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            border: 1px solid #e5e7ed;
+        }
+        .wsi-holding-icon img {
+            width: 52px;
+            height: 52px;
+            object-fit: cover;
+        }
+        .wsi-holding-fallback {
+            font-weight: 700;
+            color: #4a5568;
+            font-size: 18px;
+        }
+        .wsi-holding-name {
+            font-weight: 800;
+            font-size: 17px;
+            color: #0f172a;
+        }
+        .wsi-holding-sub {
+            font-size: 13px;
+            color: #6b7280;
+        }
+        .wsi-holding-change {
+            font-weight: 800;
+            font-size: 13px;
+            padding: 8px 12px;
+            border-radius: 12px;
+            min-width: 70px;
+            text-align: center;
+        }
+        .wsi-badge-up {
+            background: #e6f7ed;
+            color: #0a8f3e;
+        }
+        .wsi-badge-down {
+            background: #fdecea;
+            color: #c0392b;
+        }
+        .wsi-holding-body {
+            margin-top: 14px;
+            padding-top: 12px;
+            border-top: 1px solid #f0f2f5;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+        .wsi-holding-label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #9ca3af;
+            margin-bottom: 4px;
+        }
+        .wsi-holding-value {
+            font-weight: 800;
+            font-size: 16px;
+            color: #111827;
+        }
+        .wsi-text-up { color: #0a8f3e; }
+        .wsi-text-down { color: #c0392b; }
+        .wsi-holding-actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 14px;
+        }
+        .wsi-sell-btn {
+            border: 1px solid #e5e7eb;
+            background: #fff;
+            color: #c0392b;
+            border-radius: 10px;
+            padding: 8px 14px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .wsi-sell-btn:hover { background: #fff6f4; }
+        @media (max-width: 640px) {
+            .wsi-holding-body { grid-template-columns: 1fr; }
+            .wsi-holding-header { flex-wrap: wrap; }
+        }
     </style>
 
     <script defer src="<?php echo plugin_dir_url(__FILE__) . 'assets/js/app435e.js?1096aad991449c8654b2'; ?>"></script>
@@ -128,303 +238,76 @@ $holdings = $wpdb->get_results(
             </div>
         </div>
 
-        <!-- updates -->
-        <div class="container-fluid mt-4 ">
-            <div class="row align-items-center">
-                <div class="col">
-                    <h6 class="mb-0">Updates:</h6>
-                    <p class="small text-secondary">Today <span class="text-danger">Live</span></p>
-                </div>
-                <div class="col-12 col-sm-10 col-xxl-11 py-2">
-                    <div class="swiper swipernav">
-                        <div class="swiper-wrapper">
-                            <div class="swiper-slide width-200">
-                                <h6 class="mb-0 text-success">24,806.00</h6>
-                                <p class="small"><span class="text-secondary">GIFTS NIFTYS:</span> <span class="text-success"><i class="bi bi-caret-up-fill"></i> 1.40%</span> </p>
-                            </div>
-                            <div class="swiper-slide width-200">
-                                <h6 class="mb-0 text-success">41,118.13</h6>
-                                <p class="small"><span class="text-secondary">Nikkies 2250:</span> <span class="text-success"><i class="bi bi-caret-up-fill"></i> 0.40%</span> </p>
-                            </div>
-                            <div class="swiper-slide width-200">
-                                <h6 class="mb-0 text-danger">30,006.00</h6>
-                                <p class="small"><span class="text-secondary">JOHN DOUES:</span> <span class="text-danger"><i class="bi bi-caret-down-fill"></i> 0.40%</span> </p>
-                            </div>
-                            <div class="swiper-slide width-200">
-                                <h6 class="mb-0 text-success">90,105.00</h6>
-                                <p class="small"><span class="text-secondary">Adminuiux Love:</span> <span class="text-success"><i class="bi bi-caret-up-fill"></i> 1.40%</span> </p>
-                            </div>
-                            <!-- repeat items as needed -->
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <!-- content -->
         <div class="container mt-4" id="main-content">
             <div class="row">
-
-                <!-- portfolio chart -->
-                <div class="col-12 col-lg-6 col-xl-4 mb-4">
-                    <!-- summary account -->
-                    <div class="card adminuiux-card">
-                        <div class="card-body pb-0">
-                            <div class="avatar avatar-60 bg-theme-1-subtle text-theme-1 rounded mb-4">
-                                <i class="bi bi-bar-chart-line h4"></i>
-                            </div>
-                            <h5 class="fw-medium">Your portfolio value is</h5>
-                            <h1 class="fw-medium">$ 65.52k <span class="text-success fs-14"><i class="bi bi-arrow-up-short me-1"></i> 18.5%</span></h1>
-                            <p class="text-secondary mb-4">Your portfolio has been grown to<br>$ 152.00 at 7% last week.</p>
-
-                            <div class="row">
-                                <div class="col">
-                                    <div class="card mb-3">
-                                        <div class="card-body">
-                                            <p class="text-secondary mb-2">Total Assets</p>
-                                            <h4 class="fw-medium">$ 15.51k </h4>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="col">
-                                    <div class="card mb-3">
-                                        <div class="card-body">
-                                            <p class="text-secondary mb-2">Available Balance</p>
-                                            <h4 class="fw-medium">$ 45.00k</h4>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                </div>
-                <div class="col-12 col-lg-6 col-xl-8 mb-4">
-                    <div class="card adminuiux-card">
-                        <!-- chart section -->
-                        <div class="card-header">
-                            <div class="row align-items-center">
-                                <div class="col-auto">
-                                    <nav aria-label="Page navigation example">
-                                        <ul class="pagination pagination-sm justify-content-end mb-0">
-                                            <li class="page-item"><a class="page-link" href="#">1D</a></li>
-                                            <li class="page-item"><a class="page-link active" href="#">1W</a></li>
-                                            <li class="page-item"><a class="page-link" href="#">1M</a></li>
-                                            <li class="page-item"><a class="page-link" href="#">1Y</a></li>
-                                            <li class="page-item"><a class="page-link" href="#">All</a></li>
-                                        </ul>
-                                    </nav>
-                                </div>
-                                <div class="col position-relative text-end">
-                                    <input type="text" class="form-control d-inline-block w-auto align-middle mx-3" id="daterangepicker">
-                                    <button class="btn btn-square btn-theme d-inline-block align-middle" onclick="$(this).prev().click()">
-                                        <i data-feather="calendar"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="card-body">
-                            <div class="w-100 height-270">
-                                <canvas id="summarychart"></canvas>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Assets funds and shares -->
                 <div class="col-12">
-                    <div class="card adminuiux-card mb-4">
-                        <div class="card-header">
-                            <div class="row align-items-center">
-                                <div class="col">
-                                    <h6>My Available Stocks Holdings</h6>
+                    <h5 class="mb-3">Your Holdings</h5>
+
+                    <?php if (empty($holdings)) { ?>
+                        <p>No holdings.</p>
+                    <?php } else { ?>
+                        <div class="wsi-holdings-list">
+                            <?php foreach ($holdings as $h): 
+                                $shares = floatval($h->shares ?? 0);
+                                $unit_price = floatval($h->price ?? 0);
+                                $invested = floatval($h->invested_amount ?? 0);
+                                $current_value = $shares * $unit_price;
+                                $profit = $current_value - $invested + floatval($h->accumulated_profit ?? 0);
+                                $profit_pct = ($invested > 0) ? ($profit / $invested * 100) : 0;
+                                $change_class = ($profit >= 0) ? 'wsi-badge-up' : 'wsi-badge-down';
+                                $profit_class = ($profit >= 0) ? 'wsi-text-up' : 'wsi-text-down';
+                            ?>
+                            <div class="wsi-holding-card">
+                                <div class="wsi-holding-header">
+                                    <div class="wsi-holding-left">
+                                        <div class="wsi-holding-icon">
+                                            <?php if (!empty($h->image)) : ?>
+                                                <img src="<?php echo esc_url($h->image); ?>" alt="">
+                                            <?php else : ?>
+                                                <span class="wsi-holding-fallback"><?php echo esc_html(substr($h->name ?? 'S', 0, 1)); ?></span>
+                                            <?php endif; ?>
+                                        </div>
+                                        <div>
+                                            <div class="wsi-holding-name"><?php echo esc_html($h->name ?? 'Unknown'); ?></div>
+                                            <div class="wsi-holding-sub"><?php echo number_format($shares, 2); ?> units @ $<?php echo number_format($unit_price, 2); ?></div>
+                                        </div>
+                                    </div>
+                                    <div class="wsi-holding-change <?php echo esc_attr($change_class); ?>">
+                                        <?php echo ($profit_pct >= 0 ? '+' : '') . number_format($profit_pct, 1); ?>%
+                                    </div>
+                                </div>
+
+                                <div class="wsi-holding-body">
+                                    <div>
+                                        <div class="wsi-holding-label">Invested</div>
+                                        <div class="wsi-holding-value">$<?php echo number_format($invested, 2); ?></div>
+                                    </div>
+                                    <div>
+                                        <div class="wsi-holding-label">Current Value</div>
+                                        <div class="wsi-holding-value">$<?php echo number_format($current_value, 2); ?></div>
+                                    </div>
+                                    <div>
+                                        <div class="wsi-holding-label">Profit/Loss</div>
+                                        <div class="wsi-holding-value <?php echo esc_attr($profit_class); ?>">
+                                            <?php echo ($profit >= 0 ? '+' : '') . '$' . number_format($profit, 2); ?>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="wsi-holding-actions">
+                                    <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                                        <input type="hidden" name="action" value="wsi_sell_holding">
+                                        <?php wp_nonce_field('wsi_sell_holding_nonce'); ?>
+                                        <input type="hidden" name="holding_id" value="<?php echo intval($h->id); ?>">
+                                        <button class="wsi-sell-btn" type="submit">Sell</button>
+                                    </form>
                                 </div>
                             </div>
+                            <?php endforeach; ?>
                         </div>
-
-                        <div class="card-body">
-
-                            <?php if (empty($holdings)) { ?>
-                                <p>No holdings.</p>
-                            <?php } else { ?>
-
-                                <table class="table mb-0" data-show-toggle="true" id="dataTable">
-                                    <thead>
-                                        <tr>
-                                            <th>Stock</th>
-                                            <th>Price</th>
-                                            <th data-breakpoints="xs">Holding</th>
-                                            <th data-breakpoints="xs sm">Profit/Loss</th>
-                                            <th data-breakpoints="xs">Today's Trend</th>
-                                            <th>% Change</th>
-                                            <th>Action</th>
-                                        </tr>
-                                    </thead>
-
-                                    <tbody>
-
-                                        <?php foreach ($holdings as $h): ?>
-
-                                            <?php
-                                                // Safe fallbacks (prevent undefined property warnings)
-                                                $h->image = $h->image ?? '';
-                                                $h->current_price = isset($h->current_price) ? (float)$h->current_price : (float)($h->price ?? 0);
-                                                $h->last_price = isset($h->last_price) ? (float)$h->last_price : $h->current_price;
-                                                $h->shares = $h->shares ?? 0;
-                                                $h->invested_amount = $h->invested_amount ?? 0;
-                                                $h->accumulated_profit = $h->accumulated_profit ?? 0;
-                                                $h->profit_percent = $h->profit_percent ?? 0;
-                                                $h->today_change = $h->today_change ?? 0;
-                                                $h->previous_price = $h->previous_price ?? $h->last_price; // prev value for animation
-                                                $h->previous_profit = $h->previous_profit ?? $h->accumulated_profit;
-                                                $h->yesterday_change = $h->yesterday_change ?? ($h->today_change - 0);
-                                            ?>
-
-                                            <tr>
-                                                <!-- STOCK + IMAGE -->
-                                                <td>
-                                                    <div class="d-flex align-items-center">
-                                                        <div class="avatar avatar-40 rounded coverimg me-2">
-                                                            <?php if (!empty($h->image)) : ?>
-                                                                <img src="<?php echo esc_url($h->image); ?>" alt="<?php echo esc_attr($h->name); ?>">
-                                                            <?php endif; ?>
-                                                        </div>
-                                                        <div>
-                                                            <p class="mb-0"><?php echo esc_html($h->name); ?></p>
-                                                        </div>
-                                                    </div>
-                                                </td>
-
-
-
-                                                <!-- PRICE -->
-                                                <td>
-                                                    <p class="mb-0">
-                                                        $<span class="price-animate number-fade animate-number"
-                                                                data-prev="<?php echo esc_attr(number_format((float)$h->previous_price, 2, '.', '')); ?>"
-                                                                data-start="<?php echo esc_attr(number_format((float)$h->previous_price, 2, '.', '')); ?>"
-                                                                data-end="<?php echo esc_attr(number_format((float)$h->current_price, 2, '.', '')); ?>"
-                                                                data-duration="700">
-                                                            <?php echo number_format((float)$h->current_price, 2); ?>
-                                                        </span>
-                                                    </p>
-                                                    <p class="small">
-                                                        <span class="text-secondary">LTP:</span>
-                                                        <span class="price-animate number-fade animate-number"
-                                                              data-prev="<?php echo esc_attr(number_format((float)$h->last_price, 2, '.', '')); ?>"
-                                                              data-start="<?php echo esc_attr(number_format((float)$h->last_price, 2, '.', '')); ?>"
-                                                              data-end="<?php echo esc_attr(number_format((float)$h->last_price, 2, '.', '')); ?>"
-                                                              data-duration="600">
-                                                            <?php echo number_format((float)$h->last_price, 2); ?>
-                                                        </span>
-                                                    </p>
-                                                </td>
-
-                                                <!-- HOLDING -->
-                                                <td>
-                                                    <p class="mb-0"><?php echo esc_html($h->shares); ?> units</p>
-                                                    <p class="small">
-                                                        <span class="text-secondary">Invested:</span>
-                                                        $<?php echo number_format((float)$h->invested_amount, 2); ?>
-                                                    </p>
-                                                </td>
-
-                                                <!-- PROFIT / LOSS -->
-                                                <td>
-                                                    <?php
-                                                        $profit = (float)$h->accumulated_profit;
-                                                        $profit_pct = (float)$h->profit_percent;
-                                                        $profit_class = $profit >= 0 ? "text-success" : "text-danger";
-                                                        $profit_icon  = $profit >= 0 ? "bi-caret-up-fill" : "bi-caret-down-fill";
-                                                    ?>
-                                                    <p class="mb-0 <?php echo $profit_class; ?>">
-                                                        <i class="bi <?php echo $profit_icon; ?>"></i>
-                                                        <span class="price-animate number-fade animate-number"
-                                                              data-prev="<?php echo esc_attr(number_format((float)$h->previous_profit, 2, '.', '')); ?>"
-                                                              data-start="<?php echo esc_attr(number_format((float)$h->previous_profit, 2, '.', '')); ?>"
-                                                              data-end="<?php echo esc_attr(number_format($profit_pct, 2, '.', '')); ?>"
-                                                              data-duration="700">
-                                                            <?php echo number_format($profit_pct, 2); ?>%
-                                                        </span>
-                                                    </p>
-                                                    <p class="small">
-                                                        <span class="text-secondary">Profit:</span>
-                                                        <span class="price-animate number-fade animate-number"
-                                                              data-prev="<?php echo esc_attr(number_format((float)$h->previous_profit, 2, '.', '')); ?>"
-                                                              data-start="<?php echo esc_attr(number_format((float)$h->previous_profit, 2, '.', '')); ?>"
-                                                              data-end="<?php echo esc_attr(number_format($profit, 2, '.', '')); ?>"
-                                                              data-duration="800">
-                                                            $<?php echo number_format($profit, 2); ?>
-                                                        </span>
-                                                    </p>
-                                                </td>
-
-                                                <!-- TREND -->
-                                                <td>
-                                                    <?php
-                                                        $trend = $h->trend ?? 'Neutral';
-                                                        $trend_class = ($trend === 'Bullish') ? "text-success" : (($trend === 'Bearish') ? "text-danger" : "text-secondary");
-                                                        $trend_icon  = ($trend === 'Bullish') ? "bi-graph-up-arrow" : (($trend === 'Bearish') ? "bi-graph-down-arrow" : "bi-dash");
-                                                    ?>
-                                                    <p class="mb-0 <?php echo $trend_class; ?>">
-                                                        <i class="bi <?php echo $trend_icon; ?>"></i>
-                                                        <?php echo esc_html($trend); ?>
-                                                    </p>
-                                                </td>
-
-                                                <!-- TODAY % CHANGE -->
-                                                <td>
-                                                    <p class="mb-0 <?php echo $profit_class; ?>">
-                                                        <i class="bi <?php echo $profit_icon; ?>"></i>
-                                                        <span class="price-animate number-fade animate-number"
-                                                              data-prev="<?php echo esc_attr(number_format((float)$h->yesterday_change, 2, '.', '')); ?>"
-                                                              data-start="<?php echo esc_attr(number_format((float)$h->yesterday_change, 2, '.', '')); ?>"
-                                                              data-end="<?php echo esc_attr(number_format((float)$h->today_change, 2, '.', '')); ?>"
-                                                              data-duration="700">
-                                                            <?php echo number_format((float)$h->today_change, 2); ?>%
-                                                        </span>
-                                                    </p>
-                                                </td>
-
-                                                <!-- ACTIONS -->
-                                                <td>
-                                                    <!-- Invest button -->
-                                                    <button class="btn btn-sm btn-outline-success">Invest</button>
-
-                                                    <!-- Sell button -->
-                                                    <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" class="d-inline">
-                                                        <input type="hidden" name="action" value="wsi_sell_holding">
-                                                        <?php wp_nonce_field('wsi_sell_holding_nonce'); ?>
-                                                        <input type="hidden" name="holding_id" value="<?php echo intval($h->id); ?>">
-                                                        <button class="btn btn-sm btn-outline-danger">Sell</button>
-                                                    </form>
-
-                                                    <!-- Extra dropdown -->
-                                                    <div class="dropdown d-inline-block">
-                                                        <a class="btn btn-link btn-square no-caret" data-bs-toggle="dropdown">
-                                                            <i class="bi bi-three-dots"></i>
-                                                        </a>
-                                                        <ul class="dropdown-menu dropdown-menu-end">
-                                                            <li><a class="dropdown-item" href="javascript:void(0)">Favorite</a></li>
-                                                            <li><a class="dropdown-item" href="javascript:void(0)">View Chart</a></li>
-                                                            <li><a class="dropdown-item" href="javascript:void(0)">Company Events</a></li>
-                                                        </ul>
-                                                    </div>
-                                                </td>
-                                            </tr>
-
-                                        <?php endforeach; ?>
-
-                                    </tbody>
-                                </table>
-
-                            <?php } ?>
-
-                        </div>
-                    </div>
+                    <?php } ?>
                 </div>
-
-
             </div>
         </div>
     </main>
@@ -434,99 +317,7 @@ $holdings = $wpdb->get_results(
     <!-- page footer -->
     <?php include_once "assets/inc/footer.php" ?>
 
-    <!-- Page Level js -->
-    <script src="assets/js/investment/investment-company-shares.js"></script>
-
-    <!-- --- Animation JS: number count + flash highlight --- -->
-    <script>
-    (function () {
-        'use strict';
-
-        // Smooth numeric animator: from start -> end (numbers as floats), duration in ms
-        function animateNumberElem(elem, start, end, duration) {
-            start = parseFloat(start);
-            end = parseFloat(end);
-            duration = parseInt(duration, 10) || 600;
-
-            if (isNaN(start) || isNaN(end) || start === end) {
-                // Still apply flash logic based on dataset-prev if available
-                return;
-            }
-
-            var startTime = null;
-            function step(timestamp) {
-                if (!startTime) startTime = timestamp;
-                var progress = Math.min((timestamp - startTime) / duration, 1);
-                var current = start + (end - start) * easeOutCubic(progress);
-                // format with 2 decimals
-                elem.textContent = current.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                if (progress < 1) {
-                    window.requestAnimationFrame(step);
-                }
-            }
-            window.requestAnimationFrame(step);
-        }
-
-        // Easing (nice feel)
-        function easeOutCubic(t) {
-            return (--t) * t * t + 1;
-        }
-
-        // Add flash class (price-up / price-down), remove after timeout
-        function flashIfChanged(elem, prev, curr) {
-            prev = parseFloat(prev);
-            curr = parseFloat(curr);
-
-            if (isNaN(prev) || isNaN(curr) || prev === curr) return;
-
-            if (curr > prev) {
-                elem.classList.add('price-up');
-                setTimeout(function () { elem.classList.remove('price-up'); }, 900);
-            } else if (curr < prev) {
-                elem.classList.add('price-down');
-                setTimeout(function () { elem.classList.remove('price-down'); }, 900);
-            }
-        }
-
-        // Initialize all animate-number elements
-        function runAnimations() {
-            var elems = document.querySelectorAll('.animate-number');
-
-            elems.forEach(function (el) {
-                // data attributes: data-prev, data-start, data-end, data-duration
-                var prev = el.getAttribute('data-prev');
-                var start = el.getAttribute('data-start') ?? prev ?? el.textContent;
-                var end = el.getAttribute('data-end') ?? el.textContent;
-                var duration = el.getAttribute('data-duration') ?? 700;
-
-                // remove any thousands separators before parsing
-                var prevNum = parseFloat(String(prev || '').replace(/[^0-9.\-]/g, ''));
-                var startNum = parseFloat(String(start || '').replace(/[^0-9.\-]/g, ''));
-                var endNum = parseFloat(String(end || '').replace(/[^0-9.\-]/g, ''));
-
-                // run numeric animation
-                if (!isNaN(startNum) && !isNaN(endNum) && startNum !== endNum) {
-                    // temporarily set to start value to animate from
-                    el.textContent = startNum.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                    animateNumberElem(el, startNum, endNum, Number(duration));
-                }
-
-                // flash highlight based on prev vs end
-                if (!isNaN(prevNum) && !isNaN(endNum)) {
-                    flashIfChanged(el, prevNum, endNum);
-                }
-            });
-        }
-
-        document.addEventListener('DOMContentLoaded', function () {
-            runAnimations();
-
-            // OPTIONAL: if you later fetch live updates via AJAX, call runAnimations() afterwards on updated DOM
-            // Example: after updating the innerText and data-prev of elements, call runAnimations() again to animate change.
-        });
-    })();
-    </script>
-
+    <!-- Page Level js (removed heavy charts; layout is static list) -->
 </body>
 
 </html>
