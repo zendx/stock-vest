@@ -2,9 +2,22 @@
 
 if (!defined('ABSPATH')) exit;
 
+if (!is_user_logged_in()) {
+    $redirect = function_exists('wsi_login_url') ? wsi_login_url() : wp_login_url();
+    wp_safe_redirect($redirect);
+    exit;
+}
+
 // Get the plugin assets URL
 $PLUGIN_ASSETS = plugins_url('pages/assets/', dirname(dirname(__FILE__)) . '/stock-vest.php');
 $wsi = $PLUGIN_ASSETS;
+
+// Cache-busting version for shared assets
+$wsi_asset_ver = (defined('WSI_VER') ? WSI_VER : '1.0.0');
+$wsi_asset_path = plugin_dir_path(__FILE__) . 'assets/js/app435e.js';
+if (file_exists($wsi_asset_path)) {
+    $wsi_asset_ver .= '-' . filemtime($wsi_asset_path);
+}
 
 ?>
 <!DOCTYPE html>
@@ -33,7 +46,7 @@ $wsi = $PLUGIN_ASSETS;
         }
     </style>
 
-    <script defer src="<?php echo plugin_dir_url(__FILE__) . 'assets/js/app435e.js?1096aad991449c8654b2'; ?>"></script><link href="<?php echo plugin_dir_url(__FILE__) . 'assets/css/app435e.css?1096aad991449c8654b2'; ?>" rel="stylesheet">
+    <script defer src="<?php echo plugin_dir_url(__FILE__) . 'assets/js/app435e.js?v=' . esc_attr($wsi_asset_ver); ?>"></script><link href="<?php echo plugin_dir_url(__FILE__) . 'assets/css/app435e.css?v=' . esc_attr($wsi_asset_ver); ?>" rel="stylesheet">
 </head>
 
 <body class="main-bg main-bg-opac main-bg-blur adminuiux-sidebar-fill-white adminuiux-sidebar-boxed  theme-blue roundedui" data-theme="theme-blue" data-sidebarfill="adminuiux-sidebar-fill-white" data-bs-spy="scroll" data-bs-target="#list-example" data-bs-smooth-scroll="true" tabindex="0">
@@ -253,57 +266,62 @@ $wsi = $PLUGIN_ASSETS;
 
                                         <p class="text-secondary small mb-3">Tap any transaction to view full details.</p>
 
-                                        <?php if ($txs): ?>
-                                            <div class="wsi-tx-list">
-                                                <?php foreach ($txs as $t):
-                                                    $badge = 'success';
-                                                    if ($t->type === 'withdraw_request') $badge = 'warning';
-                                                    if ($t->type === 'smart_farm_interest') $badge = 'info';
-                                                    if ($t->type === 'reinvest') $badge = 'primary';
+                                        <div id="wsi-tx-mount">
+                                            <?php if ($txs): ?>
+                                                <div class="wsi-tx-list">
+                                                    <?php foreach ($txs as $t):
+                                                        $badge = 'success';
+                                                        if ($t->type === 'withdraw_request') $badge = 'warning';
+                                                        if ($t->type === 'smart_farm_interest') $badge = 'info';
+                                                        if ($t->type === 'reinvest') $badge = 'primary';
 
-                                                    $amount_class = ($t->amount >= 0) ? 'wsi-amount-up' : 'wsi-amount-down';
-                                                    $desc = trim($t->description) !== '' ? $t->description : 'No description';
-                                                ?>
-                                                <details class="wsi-tx-card">
-                                                    <summary>
-                                                        <div>
-                                                            <div class="wsi-tx-type">
-                                                                <span class="badge badge-light rounded-pill text-bg-<?php echo $badge; ?>">
-                                                                    <?php echo esc_html($t->type); ?>
-                                                                </span>
-                                                                <span class="wsi-tx-date"><?php echo esc_html($t->created_at); ?></span>
+                                                        $amount_class = ($t->amount >= 0) ? 'wsi-amount-up' : 'wsi-amount-down';
+                                                        $desc = trim($t->description) !== '' ? $t->description : 'No description';
+                                                    ?>
+                                                    <details class="wsi-tx-card">
+                                                        <summary>
+                                                            <div>
+                                                                <div class="wsi-tx-type">
+                                                                    <span class="badge badge-light rounded-pill text-bg-<?php echo $badge; ?>">
+                                                                        <?php echo esc_html($t->type); ?>
+                                                                    </span>
+                                                                    <span class="wsi-tx-date"><?php echo esc_html($t->created_at); ?></span>
+                                                                </div>
+                                                                <div class="wsi-tx-amount <?php echo $amount_class; ?>">
+                                                                    $<?php echo number_format($t->amount, 2); ?>
+                                                                </div>
                                                             </div>
-                                                            <div class="wsi-tx-amount <?php echo $amount_class; ?>">
-                                                                $<?php echo number_format($t->amount, 2); ?>
+                                                        </summary>
+                                                        <div class="wsi-tx-body">
+                                                            <div class="wsi-tx-row">
+                                                                <span class="wsi-tx-label">Description</span>
+                                                                <span class="wsi-tx-text"><?php echo esc_html($desc); ?></span>
+                                                            </div>
+                                                            <div class="wsi-tx-row">
+                                                                <span class="wsi-tx-label">ID</span>
+                                                                <span class="wsi-tx-text"><?php echo intval($t->id); ?></span>
+                                                            </div>
+                                                            <div class="wsi-tx-row">
+                                                                <span class="wsi-tx-label">Date</span>
+                                                                <span class="wsi-tx-text"><?php echo esc_html($t->created_at); ?></span>
+                                                            </div>
+                                                            <div class="wsi-tx-row">
+                                                                <span class="wsi-tx-label">Amount</span>
+                                                                <span class="wsi-tx-text <?php echo $amount_class; ?>">$<?php echo number_format($t->amount, 2); ?></span>
                                                             </div>
                                                         </div>
-                                                    </summary>
-                                                    <div class="wsi-tx-body">
-                                                        <div class="wsi-tx-row">
-                                                            <span class="wsi-tx-label">Description</span>
-                                                            <span class="wsi-tx-text"><?php echo esc_html($desc); ?></span>
-                                                        </div>
-                                                        <div class="wsi-tx-row">
-                                                            <span class="wsi-tx-label">ID</span>
-                                                            <span class="wsi-tx-text"><?php echo intval($t->id); ?></span>
-                                                        </div>
-                                                        <div class="wsi-tx-row">
-                                                            <span class="wsi-tx-label">Date</span>
-                                                            <span class="wsi-tx-text"><?php echo esc_html($t->created_at); ?></span>
-                                                        </div>
-                                                        <div class="wsi-tx-row">
-                                                            <span class="wsi-tx-label">Amount</span>
-                                                            <span class="wsi-tx-text <?php echo $amount_class; ?>">$<?php echo number_format($t->amount, 2); ?></span>
-                                                        </div>
-                                                    </div>
-                                                </details>
-                                                <?php endforeach; ?>
-                                            </div>
+                                                    </details>
+                                                    <?php endforeach; ?>
+                                                </div>
+                                            <?php else: ?>
+                                                <p class="text-center mb-0">No transactions found.</p>
+                                            <?php endif; ?>
+                                        </div>
+                                        <div class="wsi-pagination" id="wsi-tx-pagination">
                                             <?php if ($total_pages > 1): 
                                                 $prev_page = $page - 1;
                                                 $next_page = $page + 1;
                                             ?>
-                                            <div class="wsi-pagination">
                                                 <?php if ($page > 1): ?>
                                                     <a href="<?php echo $build_qs(['pg' => $prev_page]); ?>">&laquo; Prev</a>
                                                 <?php else: ?>
@@ -315,11 +333,8 @@ $wsi = $PLUGIN_ASSETS;
                                                 <?php else: ?>
                                                     <span class="disabled">Next &raquo;</span>
                                                 <?php endif; ?>
-                                            </div>
                                             <?php endif; ?>
-                                        <?php else: ?>
-                                            <p class="text-center mb-0">No transactions found.</p>
-                                        <?php endif; ?>
+                                        </div>
 
                                     </div>
                                 </div>
@@ -336,6 +351,70 @@ $wsi = $PLUGIN_ASSETS;
             <?php include_once "assets/inc/footer.php" ?>
 
                     <!-- Page Level js -->
+                    <script>
+                    document.addEventListener('DOMContentLoaded', function() {
+                        const apiRoot = "<?php echo esc_url_raw(rest_url('wsi/v1')); ?>";
+                        const nonce = "<?php echo esc_attr(wp_create_nonce('wp_rest')); ?>";
+                        const mount = document.getElementById('wsi-tx-mount');
+                        const paginationMount = document.getElementById('wsi-tx-pagination');
+                        if (!mount) return;
+
+                        const params = new URLSearchParams(window.location.search);
+                        const page = Math.max(1, parseInt(params.get('pg') || '1', 10));
+                        const ftype = params.get('ftype') || '';
+                        const orderby = params.get('orderby') || 'created_at';
+                        const order = params.get('order') || 'DESC';
+
+                        const query = new URLSearchParams({
+                            page: page.toString(),
+                            ftype,
+                            orderby,
+                            order
+                        });
+
+                        fetch(`${apiRoot}/transactions?${query.toString()}`, {
+                            headers: { 'X-WP-Nonce': nonce },
+                            credentials: 'same-origin'
+                        })
+                        .then(res => res.ok ? res.json() : Promise.reject(res))
+                        .then(data => {
+                            if (data.items_html) {
+                                mount.innerHTML = data.items_html;
+                            }
+                            if (paginationMount) {
+                                paginationMount.innerHTML = buildPagination(data.page || page, data.total_pages || 1);
+                            }
+                        })
+                        .catch(err => console.warn('Transactions refresh failed', err));
+
+                        function buildPagination(current, total) {
+                            if (!total || total <= 1) return '';
+                            const parts = [];
+                            const baseUrl = new URL(window.location.href);
+                            baseUrl.searchParams.delete('pg');
+
+                            const prevUrl = new URL(baseUrl);
+                            prevUrl.searchParams.set('pg', Math.max(1, current - 1));
+                            const nextUrl = new URL(baseUrl);
+                            nextUrl.searchParams.set('pg', Math.min(total, current + 1));
+
+                            if (current > 1) {
+                                parts.push(`<a href="${prevUrl.toString()}">&laquo; Prev</a>`);
+                            } else {
+                                parts.push('<span class="disabled">&laquo; Prev</span>');
+                            }
+
+                            parts.push(`<span>Page ${current} of ${total}</span>`);
+
+                            if (current < total) {
+                                parts.push(`<a href="${nextUrl.toString()}">Next &raquo;</a>`);
+                            } else {
+                                parts.push('<span class="disabled">Next &raquo;</span>');
+                            }
+                            return parts.join('');
+                        }
+                    });
+                    </script>
                     </body>
 
 </html>

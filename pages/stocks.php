@@ -2,9 +2,22 @@
 
 if (!defined('ABSPATH')) exit;
 
+if (!is_user_logged_in()) {
+    $redirect = function_exists('wsi_login_url') ? wsi_login_url() : wp_login_url();
+    wp_safe_redirect($redirect);
+    exit;
+}
+
 // Get the plugin assets URL
 $PLUGIN_ASSETS = plugins_url('pages/assets/', dirname(dirname(__FILE__)) . '/stock-vest.php');
 $wsi = $PLUGIN_ASSETS;
+
+// Cache-busting version for shared assets
+$wsi_asset_ver = (defined('WSI_VER') ? WSI_VER : '1.0.0');
+$wsi_asset_path = plugin_dir_path(__FILE__) . 'assets/js/app435e.js';
+if (file_exists($wsi_asset_path)) {
+    $wsi_asset_ver .= '-' . filemtime($wsi_asset_path);
+}
 
 // Load Stocks Table
 global $wpdb;
@@ -185,7 +198,7 @@ $total_pages = ($per_page > 0) ? max(1, ceil($total_stocks / $per_page)) : 1;
         }
     </style>
 
-    <script defer src="<?php echo plugin_dir_url(__FILE__) . 'assets/js/app435e.js?1096aad991449c8654b2'; ?>"></script><link href="<?php echo plugin_dir_url(__FILE__) . 'assets/css/app435e.css?1096aad991449c8654b2'; ?>" rel="stylesheet">
+    <script defer src="<?php echo plugin_dir_url(__FILE__) . 'assets/js/app435e.js?v=' . esc_attr($wsi_asset_ver); ?>"></script><link href="<?php echo plugin_dir_url(__FILE__) . 'assets/css/app435e.css?v=' . esc_attr($wsi_asset_ver); ?>" rel="stylesheet">
 </head>
 
 <body class="main-bg main-bg-opac main-bg-blur adminuiux-sidebar-fill-white adminuiux-sidebar-boxed  theme-blue roundedui" data-theme="theme-blue" data-sidebarfill="adminuiux-sidebar-fill-white" data-bs-spy="scroll" data-bs-target="#list-example" data-bs-smooth-scroll="true" tabindex="0">

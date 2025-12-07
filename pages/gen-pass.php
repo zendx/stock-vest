@@ -5,6 +5,13 @@ if (!defined('ABSPATH')) exit;
 $plugin_dir = dirname(dirname(__FILE__)); // Go up from /pages to plugin root
 $PLUGIN_ASSETS = plugins_url('pages/assets/', $plugin_dir . '/stock-vest.php');
 
+// Cache-busting version for shared assets
+$wsi_asset_ver = (defined('WSI_VER') ? WSI_VER : '1.0.0');
+$wsi_asset_path = plugin_dir_path(__FILE__) . 'assets/js/app435e.js';
+if (file_exists($wsi_asset_path)) {
+    $wsi_asset_ver .= '-' . filemtime($wsi_asset_path);
+}
+
 $key   = sanitize_text_field($_GET['key'] ?? '');
 $login = sanitize_text_field($_GET['login'] ?? '');
 $has_link = !empty($key) && !empty($login);
@@ -37,8 +44,8 @@ if (is_user_logged_in()) {
         }
     </style>
 
-    <script defer src="<?php echo plugin_dir_url(__FILE__) . 'assets/js/app435e.js?1096aad991449c8654b2'; ?>"></script>
-    <link href="<?php echo plugin_dir_url(__FILE__) . 'assets/css/app435e.css?1096aad991449c8654b2'; ?>" rel="stylesheet">
+    <script defer src="<?php echo plugin_dir_url(__FILE__) . 'assets/js/app435e.js?v=' . esc_attr($wsi_asset_ver); ?>"></script>
+    <link href="<?php echo plugin_dir_url(__FILE__) . 'assets/css/app435e.css?v=' . esc_attr($wsi_asset_ver); ?>" rel="stylesheet">
 </head>
 
 <body class="main-bg main-bg-opac main-bg-blur adminuiux-sidebar-fill-white adminuiux-sidebar-boxed theme-blue roundedui">

@@ -242,6 +242,13 @@ if (empty($assets)) {
                 </li>
 
                 <li class="nav-item">
+                    <a href="../reinvest" class="nav-link">
+                        <i class="menu-icon bi bi-recycle"></i>
+                        <span class="menu-name">Reinvest</span>
+                    </a>
+                </li>
+
+                <li class="nav-item">
                     <a href="../stocks" class="nav-link">
                         <i data-feather="settings" class="menu-icon"></i>
                         <span class="menu-name">Stocks</span>

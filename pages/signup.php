@@ -25,6 +25,13 @@ if (!$user_id) {
 
 // Asset base
 $PLUGIN_ASSETS = plugin_dir_url(__FILE__) . 'assets/';
+
+// Cache-busting version for shared assets
+$wsi_asset_ver = (defined('WSI_VER') ? WSI_VER : '1.0.0');
+$wsi_asset_path = plugin_dir_path(__FILE__) . 'assets/js/app435e.js';
+if (file_exists($wsi_asset_path)) {
+    $wsi_asset_ver .= '-' . filemtime($wsi_asset_path);
+}
 ?>
 
 <!DOCTYPE html>
@@ -54,8 +61,8 @@ $PLUGIN_ASSETS = plugin_dir_url(__FILE__) . 'assets/';
     </style>
 
     <!-- CSS + JS -->
-    <link href="<?php echo $PLUGIN_ASSETS; ?>css/app435e.css?1096aad991449c8654b2" rel="stylesheet">
-    <script defer src="<?php echo $PLUGIN_ASSETS; ?>js/app435e.js?1096aad991449c8654b2"></script>
+    <link href="<?php echo $PLUGIN_ASSETS; ?>css/app435e.css?v=<?php echo esc_attr($wsi_asset_ver); ?>" rel="stylesheet">
+    <script defer src="<?php echo $PLUGIN_ASSETS; ?>js/app435e.js?v=<?php echo esc_attr($wsi_asset_ver); ?>"></script>
 </head>
 
 <body class="main-bg main-bg-opac main-bg-blur adminuiux-sidebar-fill-white adminuiux-sidebar-boxed theme-blue roundedui"

@@ -337,6 +337,94 @@
     }
 
     /* -------------------------------------------------------------------------
+       Admin access helper (role-based allowlist)
+    ------------------------------------------------------------------------- */
+    function wsi_get_admin_allowed_roles() {
+        $opts = wsi_get_opts();
+        $raw = $opts['admin_allowed_roles'] ?? ['administrator'];
+        if (is_string($raw)) {
+            $raw = array_filter(array_map('trim', explode(',', $raw)), 'strlen');
+        }
+        $roles = array_map('sanitize_key', (array) $raw);
+        if (empty($roles)) {
+            $roles = ['administrator']; // safety default to prevent lockout
+        }
+        return array_values(array_unique($roles));
+    }
+
+    function wsi_admin_can($user_id = 0) {
+        if ($user_id === 0) {
+            $user_id = get_current_user_id();
+        }
+        // Super admins / admins retain access
+        if (current_user_can('manage_options')) return true;
+        if (current_user_can('wsi_admin_access')) return true;
+
+        $user = get_userdata($user_id);
+        if (!$user || empty($user->roles)) return false;
+
+        $allowed = wsi_get_admin_allowed_roles();
+        foreach ($user->roles as $role) {
+            if (in_array($role, $allowed, true)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Map a virtual capability so allowed roles see admin menus
+    add_filter('user_has_cap', function($allcaps, $caps, $args) {
+        // $args: [0] => capability being checked
+        if (!isset($args[0]) || $args[0] !== 'wsi_admin_access') {
+            return $allcaps;
+        }
+        // Always allow admins
+        if (!empty($allcaps['manage_options'])) {
+            $allcaps['wsi_admin_access'] = true;
+            return $allcaps;
+        }
+        $user_id = isset($args[1]) ? intval($args[1]) : get_current_user_id();
+        $user = get_userdata($user_id);
+        if (!$user || empty($user->roles)) {
+            return $allcaps;
+        }
+        $allowed = wsi_get_admin_allowed_roles();
+        foreach ($user->roles as $role) {
+            if (in_array($role, $allowed, true)) {
+                $allcaps['wsi_admin_access'] = true;
+                break;
+            }
+        }
+        return $allcaps;
+    }, 10, 3);
+
+    /**
+     * Allow-list for Settings page access (user IDs, not roles).
+     * Store under wsi_options['settings_allowed_users'] as array or comma-separated list.
+     */
+    function wsi_get_settings_allowed_users() {
+        $opts = wsi_get_opts();
+        $raw = $opts['settings_allowed_users'] ?? [];
+        if (is_string($raw)) {
+            $raw = array_filter(array_map('trim', explode(',', $raw)), 'strlen');
+        }
+        $ids = array_map('intval', (array) $raw);
+        return array_values(array_unique(array_filter($ids, function($v) { return $v > 0; })));
+    }
+
+    function wsi_user_can_access_settings($uid = 0) {
+        if ($uid === 0) {
+            $uid = get_current_user_id();
+        }
+        // Always allow site admins to avoid lockout
+        if (current_user_can('manage_options')) {
+            return true;
+        }
+        $allowed = wsi_get_settings_allowed_users();
+        return in_array(intval($uid), $allowed, true);
+    }
+
+    /* -------------------------------------------------------------------------
        BALANCE helpers (usermeta)
     ------------------------------------------------------------------------- */
     function wsi_get_main($uid) { return floatval(get_user_meta($uid, 'wsi_main_balance', true)); }
@@ -653,17 +741,18 @@ add_action('user_register', function($user_id) {
     ------------------------------------------------------------------------- */
     add_action('admin_menu', 'wsi_admin_menu');
     function wsi_admin_menu() {
-        add_menu_page('WSI', 'WSI', 'manage_options', 'wsi_main', 'wsi_admin_dashboard', 'dashicons-chart-area', 3);
-        add_submenu_page('wsi_main', 'Users', 'Users', 'manage_options', 'wsi_users', 'wsi_admin_users');
-        add_submenu_page('wsi_main', 'Deposits', 'Deposits', 'manage_options', 'wsi_deposits', 'wsi_admin_deposits');
-        add_submenu_page('wsi_main', 'Withdrawals', 'Withdrawals', 'manage_options', 'wsi_withdrawals', 'wsi_admin_withdrawals');
-        add_submenu_page('wsi_main', 'Stocks', 'Stocks', 'manage_options', 'wsi_stocks', 'wsi_admin_stocks');
-        add_submenu_page('wsi_main', 'Transactions', 'Transactions', 'manage_options', 'wsi_transactions', 'wsi_admin_transactions');
-        add_submenu_page('wsi_main', 'Settings', 'Settings', 'manage_options', 'wsi_settings', 'wsi_admin_settings');
+        $cap = 'wsi_admin_access';
+        add_menu_page('WSI', 'WSI', $cap, 'wsi_main', 'wsi_admin_dashboard', 'dashicons-chart-area', 3);
+        add_submenu_page('wsi_main', 'Users', 'Users', $cap, 'wsi_users', 'wsi_admin_users');
+        add_submenu_page('wsi_main', 'Deposits', 'Deposits', $cap, 'wsi_deposits', 'wsi_admin_deposits');
+        add_submenu_page('wsi_main', 'Withdrawals', 'Withdrawals', $cap, 'wsi_withdrawals', 'wsi_admin_withdrawals');
+        add_submenu_page('wsi_main', 'Stocks', 'Stocks', $cap, 'wsi_stocks', 'wsi_admin_stocks');
+        add_submenu_page('wsi_main', 'Transactions', 'Transactions', $cap, 'wsi_transactions', 'wsi_admin_transactions');
+        add_submenu_page('wsi_main', 'Settings', 'Settings', $cap, 'wsi_settings', 'wsi_admin_settings');
     }
 
     function wsi_admin_dashboard() {
-        if (!current_user_can('manage_options')) return;
+        if (!wsi_admin_can()) { wp_die(__('You do not have permission to access this page.')); }
         global $wpdb;
         $users_count = count_users();
         $opts = wsi_get_opts();
@@ -683,7 +772,7 @@ add_action('user_register', function($user_id) {
        ADMIN: Users page
     ------------------------------------------------------------------------- */
     function wsi_admin_users() {
-        if (!current_user_can('manage_options')) return;
+        if (!wsi_admin_can()) { wp_die(__('You do not have permission to access this page.')); }
 
         // Handle admin actions
         if (!empty($_POST['action_user']) && check_admin_referer('wsi_users_nonce')) {
@@ -870,7 +959,7 @@ add_action('user_register', function($user_id) {
        ADMIN: Deposits page (pending)
     ------------------------------------------------------------------------- */
     function wsi_admin_deposits() {
-        if (!current_user_can('manage_options')) return;
+        if (!wsi_admin_can()) { wp_die(__('You do not have permission to access this page.')); }
         
         global $wpdb;
         $t = $wpdb->prefix . 'wsi_deposits';
@@ -1037,7 +1126,7 @@ add_action('user_register', function($user_id) {
        ADMIN: Withdrawals page (pending)
     ------------------------------------------------------------------------- */
     function wsi_admin_withdrawals() {
-        if (!current_user_can('manage_options')) return;
+        if (!wsi_admin_can()) { wp_die(__('You do not have permission to access this page.')); }
         
         global $wpdb;
         $t = $wpdb->prefix . 'wsi_withdrawals';
@@ -1262,6 +1351,7 @@ add_action('user_register', function($user_id) {
        ADMIN: Stocks page (complete)
     ------------------------------------------------------------------------- */
     function wsi_admin_stocks() {
+        if (!wsi_admin_can()) { wp_die(__('You do not have permission to access this page.')); }
         global $wpdb;
         $table = $wpdb->prefix . 'wsi_stocks';
 
@@ -1597,7 +1687,7 @@ add_action('user_register', function($user_id) {
      // Avoid writing options at top-level which would overwrite admin values on every load.
 
     function wsi_admin_settings() {
-        if (!current_user_can('manage_options')) return;
+        if (!wsi_admin_can()) { wp_die(__('You do not have permission to access this page.')); }
 
         $opts = wsi_get_opts();
 
@@ -1627,6 +1717,12 @@ add_action('user_register', function($user_id) {
             $eth_wallet = sanitize_text_field($_POST['eth_wallet'] ?? '');
             $eth_instruction = sanitize_textarea_field($_POST['eth_instruction'] ?? '');
 
+            $allowed_roles = isset($_POST['wsi_admin_roles']) ? array_map('sanitize_key', (array) $_POST['wsi_admin_roles']) : [];
+            if (empty($allowed_roles)) {
+                $allowed_roles = ['administrator']; // prevent lockout
+            }
+            wsi_update_opt('admin_allowed_roles', $allowed_roles);
+
             wsi_update_opt('naira_payment_info', $naira_info);
             wsi_update_opt('usdt_trc_wallet', $usdt_trc_wallet);
             wsi_update_opt('usdt_trc_instruction', $usdt_trc_instruction);
@@ -1655,6 +1751,21 @@ add_action('user_register', function($user_id) {
         <div class="wrap"><h1>WSI Settings</h1>
         <form method="post"><?php wp_nonce_field('wsi_settings_nonce'); ?>
           <table class="form-table">
+
+            <tr><th>Admin access roles</th>
+                <td>
+                    <?php
+                    global $wp_roles;
+                    $all_roles = $wp_roles ? $wp_roles->roles : [];
+                    $allowed_roles = wsi_get_admin_allowed_roles();
+                    foreach ($all_roles as $role_key => $role_data) {
+                        $checked = in_array($role_key, $allowed_roles, true) ? 'checked' : '';
+                        echo '<label style="display:inline-block;margin-right:12px;"><input type="checkbox" name="wsi_admin_roles[]" value="' . esc_attr($role_key) . '" ' . $checked . '> ' . esc_html($role_data['name']) . '</label>';
+                    }
+                    ?>
+                    <p class="description">Users with any selected role can access WSI admin pages. Administrators always retain access.</p>
+                </td>
+            </tr>
 
             <tr><th>Main balance daily interest (%)</th>
                 <td><input name="main_daily_percent" type="number" step="0.001" value="<?php echo esc_attr($opts['main_daily_percent'] ?? 2.29); ?>"></td></tr>
@@ -3068,7 +3179,7 @@ add_action('user_register', function($user_id) {
     ------------------------------------------------------------------------- */
     if (!function_exists('wsi_admin_approve_withdrawal')) {
         function wsi_admin_approve_withdrawal() {
-            if (!current_user_can('manage_options')) {
+            if (!wsi_admin_can()) {
                 wp_send_json_error(['message' => 'Unauthorized']);
             }
             
@@ -3115,7 +3226,7 @@ add_action('user_register', function($user_id) {
 
     if (!function_exists('wsi_admin_decline_withdrawal')) {
         function wsi_admin_decline_withdrawal() {
-            if (!current_user_can('manage_options')) {
+            if (!wsi_admin_can()) {
                 wp_send_json_error(['message' => 'Unauthorized']);
             }
             
@@ -3509,18 +3620,19 @@ function wsi_send_email_template($user_id, $template_key, $vars = []) {
 
 // Admin log page for email attempts
 add_action('admin_menu', function() {
+    if (!wsi_admin_can()) return;
     add_submenu_page(
         'tools.php',
         'WSI Email Log',
         'WSI Email Log',
-        'manage_options',
+        'wsi_admin_access',
         'wsi-email-log',
         'wsi_render_email_log_page'
     );
 });
 
 function wsi_render_email_log_page() {
-    if (!current_user_can('manage_options')) return;
+    if (!wsi_admin_can()) { wp_die(__('You do not have permission to access this page.')); }
     $log = wsi_get_email_log();
     ?>
     <div class="wrap">
@@ -3598,6 +3710,7 @@ function wsi_render_email_log_page() {
     function wsi_handle_reinvest() {
         if (!is_user_logged_in()) { wp_safe_redirect(wsi_login_url()); exit; }
 
+        global $wpdb;
         $dash_url = wsi_get_dashboard_page_url();
 
         if (!wp_verify_nonce($_POST['_wpnonce'] ?? '', 'wsi_reinvest_nonce')) { 
@@ -3618,7 +3731,44 @@ function wsi_render_email_log_page() {
             exit; 
         }
 
-        wsi_inc_profit($uid, -$amount);
+        // Deduct from meta profit first, then accumulated_profit in holdings (FIFO), mirroring display logic
+        $remaining = $amount;
+
+        $meta_profit = floatval(get_user_meta($uid, 'wsi_profit_balance', true));
+        if ($meta_profit > 0) {
+            $use_meta = min($meta_profit, $remaining);
+            $new_meta = max(0, $meta_profit - $use_meta);
+            update_user_meta($uid, 'wsi_profit_balance', $new_meta);
+            $remaining -= $use_meta;
+        }
+
+        if ($remaining > 0) {
+            $t_hold = $wpdb->prefix . 'wsi_holdings';
+            $holdings = $wpdb->get_results($wpdb->prepare(
+                "SELECT id, accumulated_profit FROM $t_hold WHERE user_id=%d AND status='open' ORDER BY created_at ASC",
+                $uid
+            ));
+            foreach ($holdings as $h) {
+                if ($remaining <= 0) break;
+                $current_ap = floatval($h->accumulated_profit);
+                $use = min($current_ap, $remaining);
+                if ($use > 0) {
+                    $new_ap = max(0, $current_ap - $use);
+                    $wpdb->query($wpdb->prepare(
+                        "UPDATE $t_hold SET accumulated_profit = %f WHERE id=%d",
+                        $new_ap, $h->id
+                    ));
+                    $remaining -= $use;
+                }
+            }
+        }
+
+        if ($remaining > 0) {
+            // Safety net; should not happen because we pre-check total profit
+            wsi_popup("Insufficient Profit Balance", $dash_url); 
+            exit; 
+        }
+
         wsi_inc_main($uid, $amount);
         wsi_log_tx($uid, $amount, 'reinvest', 'Reinvest from profit');
         wsi_audit($uid, 'reinvest', "Reinvested {$amount}");
@@ -3823,7 +3973,7 @@ function wsi_apply_referral($user_id, $amount, $deposit_id = 0) {
        (covers older accounts so second-level bonuses trigger)
     ------------------------------------------------------------------------- */
     add_action('admin_init', function() {
-        if (!current_user_can('manage_options')) return;
+        if (!wsi_admin_can()) return;
         if (get_option('wsi_inviter_backfill_done')) return;
 
         global $wpdb;
@@ -3936,7 +4086,7 @@ function wsi_apply_referral($user_id, $amount, $deposit_id = 0) {
         if (!is_user_logged_in()) return '<div>Please login</div>';
         global $wpdb;
         $uid = get_current_user_id();
-        if (current_user_can('manage_options')) $rows = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}wsi_transactions ORDER BY created_at DESC LIMIT 500");
+        if (wsi_admin_can()) $rows = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}wsi_transactions ORDER BY created_at DESC LIMIT 500");
         else $rows = $wpdb->get_results($wpdb->prepare("SELECT * FROM {$wpdb->prefix}wsi_transactions WHERE user_id=%d ORDER BY created_at DESC LIMIT 200", $uid));
         ob_start();
         echo '<table class="widefat"><thead><tr><th>When</th><th>Amount</th><th>Type</th><th>Desc</th></tr></thead><tbody>';
@@ -4335,7 +4485,7 @@ function wsi_apply_referral($user_id, $amount, $deposit_id = 0) {
 
             // Block non-admin from wp-admin
             if (is_admin() && !defined('DOING_AJAX')) {
-                if (!current_user_can('manage_options')) {
+                if (!wsi_admin_can()) {
                     wp_safe_redirect(home_url('/wsi/login/'));
                     exit;
                 }

@@ -2,12 +2,25 @@
 
 if (!defined('ABSPATH')) exit;
 
+if (!is_user_logged_in()) {
+    $redirect = function_exists('wsi_login_url') ? wsi_login_url() : wp_login_url();
+    wp_safe_redirect($redirect);
+    exit;
+}
+
 // Get the plugin assets URL
 $PLUGIN_ASSETS = plugins_url('pages/assets/', dirname(dirname(__FILE__)) . '/stock-vest.php');
 $wsi = $PLUGIN_ASSETS;
 
 // Get current user
 $user_id = get_current_user_id();
+
+// Cache-busting version for shared assets
+$wsi_asset_ver = (defined('WSI_VER') ? WSI_VER : '1.0.0');
+$wsi_asset_path = plugin_dir_path(__FILE__) . 'assets/js/app435e.js';
+if (file_exists($wsi_asset_path)) {
+    $wsi_asset_ver .= '-' . filemtime($wsi_asset_path);
+}
 
 // --- USE THE CORRECT FUNCTIONS ---
 
@@ -70,10 +83,16 @@ $available_balance = number_format($available_balance, 2);
             --adminuiux-content-font-weight: 400;
             --adminuiux-title-font: "Lexend", sans-serif;
             --adminuiux-title-font-weight: 600;
+            --wsi-refresh-hover: #28a745;
+        }
+        .wsi-refresh-btn:hover {
+            background-color: var(--wsi-refresh-hover);
+            color: #fff !important;
+            border-color: var(--wsi-refresh-hover);
         }
     </style>
 
-    <script defer src="<?php echo plugin_dir_url(__FILE__) . 'assets/js/app435e.js?1096aad991449c8654b2'; ?>"></script><link href="<?php echo plugin_dir_url(__FILE__) . 'assets/css/app435e.css?1096aad991449c8654b2'; ?>" rel="stylesheet">
+    <script defer src="<?php echo plugin_dir_url(__FILE__) . 'assets/js/app435e.js?v=' . esc_attr($wsi_asset_ver); ?>"></script><link href="<?php echo plugin_dir_url(__FILE__) . 'assets/css/app435e.css?v=' . esc_attr($wsi_asset_ver); ?>" rel="stylesheet">
 </head>
 
 <body class="main-bg main-bg-opac main-bg-blur adminuiux-sidebar-fill-white adminuiux-sidebar-boxed  theme-blue roundedui" data-theme="theme-blue" data-sidebarfill="adminuiux-sidebar-fill-white" data-bs-spy="scroll" data-bs-target="#list-example" data-bs-smooth-scroll="true" tabindex="0">
@@ -107,7 +126,7 @@ $available_balance = number_format($available_balance, 2);
                                                     <div class="avatar avatar-60 bg-white-opacity rounded"><i class="bi bi-wallet h2"></i></div>
                                                 </div>
                                             </div>
-                                            <h1>$<?php echo $assets; ?></h1>
+                                            <h1 id="wsi-amt-assets">$<?php echo $assets; ?></h1>
                                             <h5 class="opacity-75 fw-normal mb-1">Total Assets</h5>
                                         </div>
                                     </div>
@@ -124,7 +143,7 @@ $available_balance = number_format($available_balance, 2);
                                                             <div class="avatar avatar-60 bg-success-subtle text-success rounded"><i class="bi bi-graph-down-arrow h4"></i></div>
                                                         </div>
                                                         <div class="col">
-                                                            <h4 class="fw-medium">$<?php echo $profit_income; ?></h4>
+                                                            <h4 class="fw-medium" id="wsi-amt-profit">$<?php echo $profit_income; ?></h4>
                                                             <p class="text-secondary">Profit Income<span class="text-success fs-14"></i> </span></p>
                                                         </div>
                                                     </div>
@@ -139,7 +158,7 @@ $available_balance = number_format($available_balance, 2);
                                                             <div class="avatar avatar-60 bg-danger-subtle text-danger rounded"><i class="bi bi-graph-up-arrow h4"></i></div>
                                                         </div>
                                                         <div class="col">
-                                                            <h4 class="fw-medium">$<?php echo $available_balance; ?></h4>
+                                                            <h4 class="fw-medium" id="wsi-amt-available">$<?php echo $available_balance; ?></h4>
                                                             <p class="text-secondary">Available Balance <span class="text-success fs-14"></i> </span></p>
                                                         </div>
                                                     </div>
@@ -160,7 +179,7 @@ $available_balance = number_format($available_balance, 2);
                                                             <div class="avatar avatar-60 bg-theme-1-subtle text-theme-1 rounded"><i class="bi bi-bank h4"></i></div>
                                                         </div>
                                                         <div class="col">
-                                                            <h4 class="fw-medium">$<?php echo $assets; ?></h4>
+                                                            <h4 class="fw-medium wsi-amt-assets">$<?php echo $assets; ?></h4>
                                                             <p class="text-secondary">Total Assets <span class="text-success fs-14"></i> </span></p>
                                                         </div>
                                                     </div>
@@ -175,7 +194,13 @@ $available_balance = number_format($available_balance, 2);
                                                             <div class="avatar avatar-60 bg-theme-1-subtle text-theme-1 rounded"><i class="bi bi-cash-coin h4"></i></div>
                                                         </div>
                                                         <div class="col">
-                                                            <h4 class="fw-medium">$<?php echo $net_margin; ?></h4>
+                                                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                                                                <h4 class="fw-medium mb-0" id="wsi-amt-net">$<?php echo $net_margin; ?></h4>
+                                                                <button type="button" class="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-1 wsi-refresh-btn" id="wsi-refresh-dashboard">
+                                                                    <i class="bi bi-arrow-clockwise"></i>
+                                                                    <span>Refresh</span>
+                                                                </button>
+                                                            </div>
                                                             <p class="text-secondary">Net Margin <span class="text-success fs-14"></i> </span></p>
                                                         </div>
                                                     </div>
@@ -297,6 +322,46 @@ $available_balance = number_format($available_balance, 2);
             ?>
                 <!-- Page Level js -->
                     <script src="assets/js/investment/investment-dashboard.js"></script>
+                    <script>
+                    document.addEventListener('DOMContentLoaded', function() {
+                        const refreshBtn = document.getElementById('wsi-refresh-dashboard');
+                        if (refreshBtn) {
+                            refreshBtn.addEventListener('click', function() {
+                                const url = new URL(window.location.href);
+                                url.searchParams.set('_r', Date.now().toString());
+                                window.location.href = url.toString();
+                            });
+                        }
+
+                        const apiRoot = "<?php echo esc_url_raw(rest_url('wsi/v1')); ?>";
+                        const nonce = "<?php echo esc_attr(wp_create_nonce('wp_rest')); ?>";
+                        fetch(`${apiRoot}/dashboard`, {
+                            headers: { 'X-WP-Nonce': nonce },
+                            credentials: 'same-origin'
+                        })
+                        .then(res => res.ok ? res.json() : Promise.reject(res))
+                        .then(data => {
+                            updateText('#wsi-amt-assets', data.assets);
+                            document.querySelectorAll('.wsi-amt-assets').forEach(el => updateEl(el, data.assets));
+                            updateText('#wsi-amt-profit', data.profit_income);
+                            updateText('#wsi-amt-available', data.available_balance);
+                            updateText('#wsi-amt-net', data.net_margin);
+                        })
+                        .catch(err => console.warn('Dashboard refresh failed', err));
+
+                        function formatCurrency(value) {
+                            const num = Number(value || 0);
+                            return num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                        }
+                        function updateText(selector, value) {
+                            const el = document.querySelector(selector);
+                            if (el) updateEl(el, value);
+                        }
+                        function updateEl(el, value) {
+                            el.textContent = '$' + formatCurrency(value);
+                        }
+                    });
+                    </script>
 
                     </body>
 
