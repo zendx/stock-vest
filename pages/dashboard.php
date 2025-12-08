@@ -83,12 +83,6 @@ $available_balance = number_format($available_balance, 2);
             --adminuiux-content-font-weight: 400;
             --adminuiux-title-font: "Lexend", sans-serif;
             --adminuiux-title-font-weight: 600;
-            --wsi-refresh-hover: #28a745;
-        }
-        .wsi-refresh-btn:hover {
-            background-color: var(--wsi-refresh-hover);
-            color: #fff !important;
-            border-color: var(--wsi-refresh-hover);
         }
     </style>
 
@@ -196,10 +190,6 @@ $available_balance = number_format($available_balance, 2);
                                                         <div class="col">
                                                             <div class="d-flex align-items-center gap-2 flex-wrap">
                                                                 <h4 class="fw-medium mb-0" id="wsi-amt-net">$<?php echo $net_margin; ?></h4>
-                                                                <button type="button" class="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-1 wsi-refresh-btn" id="wsi-refresh-dashboard">
-                                                                    <i class="bi bi-arrow-clockwise"></i>
-                                                                    <span>Refresh</span>
-                                                                </button>
                                                             </div>
                                                             <p class="text-secondary">Net Margin <span class="text-success fs-14"></i> </span></p>
                                                         </div>
@@ -324,15 +314,6 @@ $available_balance = number_format($available_balance, 2);
                     <script src="assets/js/investment/investment-dashboard.js"></script>
                     <script>
                     document.addEventListener('DOMContentLoaded', function() {
-                        const refreshBtn = document.getElementById('wsi-refresh-dashboard');
-                        if (refreshBtn) {
-                            refreshBtn.addEventListener('click', function() {
-                                const url = new URL(window.location.href);
-                                url.searchParams.set('_r', Date.now().toString());
-                                window.location.href = url.toString();
-                            });
-                        }
-
                         const apiRoot = "<?php echo esc_url_raw(rest_url('wsi/v1')); ?>";
                         const nonce = "<?php echo esc_attr(wp_create_nonce('wp_rest')); ?>";
                         fetch(`${apiRoot}/dashboard`, {

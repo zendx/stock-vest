@@ -49,12 +49,6 @@ $profit_balance = number_format($profit_balance_raw, 2);
             --adminuiux-content-font-weight: 400;
             --adminuiux-title-font: "Lexend", sans-serif;
             --adminuiux-title-font-weight: 600;
-            --wsi-refresh-hover: #28a745;
-        }
-        .wsi-refresh-btn:hover {
-            background-color: var(--wsi-refresh-hover);
-            color: #fff !important;
-            border-color: var(--wsi-refresh-hover);
         }
     </style>
 
@@ -104,13 +98,7 @@ $profit_balance = number_format($profit_balance_raw, 2);
                                                     <div class="row mb-4">
                                                         <div class="col">
                                                             <p class="text-secondary small mb-1">Available Profit Balance</p>
-                                                            <div class="d-flex align-items-center gap-2 flex-wrap">
-                                                                <h1 class="mb-0">$<?php echo $profit_balance; ?></h1>
-                                                                <button type="button" class="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-1 wsi-refresh-btn" id="wsi-refresh-profit">
-                                                                    <i class="bi bi-arrow-clockwise"></i>
-                                                                    <span>Refresh</span>
-                                                                </button>
-                                                            </div>
+                                                            <h1 class="mb-0">$<?php echo $profit_balance; ?></h1>
                                                         </div>
                                                     </div>
 
@@ -180,15 +168,6 @@ $profit_balance = number_format($profit_balance_raw, 2);
                     // Let the form post normally; this hook is here if we later need to add client checks.
                 });
 
-                // Refresh button: forces a page reload with a cache-busting query string
-                const refreshBtn = document.getElementById('wsi-refresh-profit');
-                if (refreshBtn) {
-                    refreshBtn.addEventListener('click', function() {
-                        const url = new URL(window.location.href);
-                        url.searchParams.set('_r', Date.now().toString());
-                        window.location.href = url.toString();
-                    });
-                }
             });
             </script>
 </body>
