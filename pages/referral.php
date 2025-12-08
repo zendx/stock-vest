@@ -79,7 +79,7 @@ if (file_exists($wsi_asset_path)) {
                                 <div class="col-12 col-sm">
                                     <nav aria-label="breadcrumb" class="mb-2">
                                         <ol class="breadcrumb mb-0">
-                                            <li class="breadcrumb-item bi"><a href="investment-dashboard.html">Home</a></li>
+                                            <li class="breadcrumb-item bi"><a href="#">Home</a></li>
                                             <li class="breadcrumb-item active bi" aria-current="page">Referral</li>
                                         </ol>
                                     </nav>

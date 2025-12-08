@@ -70,7 +70,7 @@ $profit_balance = number_format($profit_balance_raw, 2);
                                 <div class="col-12 col-sm">
                                     <nav aria-label="breadcrumb" class="mb-2">
                                         <ol class="breadcrumb mb-0">
-                                            <li class="breadcrumb-item bi"><a href="investment-dashboard.html"><i class="bi bi-house-door me-1 fs-14"></i> Dashboard</a></li>
+                                            <li class="breadcrumb-item bi"><a href="#"><i class="bi bi-house-door me-1 fs-14"></i> Dashboard</a></li>
                                             <li class="breadcrumb-item active bi" aria-current="page">Reinvest</li>
                                         </ol>
                                     </nav>

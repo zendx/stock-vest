@@ -85,7 +85,7 @@ $city       = get_user_meta($user_id, 'city', true);
                                 <div class="col-12 col-sm">
                                     <nav aria-label="breadcrumb" class="mb-2">
                                         <ol class="breadcrumb mb-0">
-                                            <li class="breadcrumb-item bi"><a href="investment-dashboard.html">Home</a></li>
+                                            <li class="breadcrumb-item bi"><a href="#">Home</a></li>
                                             <li class="breadcrumb-item active bi" aria-current="page">Settings</li>
                                         </ol>
                                     </nav>
