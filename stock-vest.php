@@ -588,6 +588,19 @@ function wsi_trigger_transaction_email($user_id, $type, $amount) {
             'created_at' => current_time('mysql')
         ]);
     }
+    function wsi_get_user_label($uid) {
+        $user = get_userdata($uid);
+        if ($user) {
+            $name = trim($user->display_name);
+            if ($name === '') {
+                $name = $user->user_login;
+            }
+            if ($name !== '') {
+                return $name;
+            }
+        }
+        return "User #{$uid}";
+    }
     function wsi_notify_admin($subject, $message) {
         $opts = wsi_get_opts();
         if (empty($opts['email_notifications'])) return;
@@ -2876,7 +2889,8 @@ add_action('user_register', function($user_id) {
             
             $deposit_id = $wpdb->insert_id;
             wsi_log_tx($uid, $amount_usd, 'deposit_pending', "Deposit #{$deposit_id} submitted");
-            wsi_notify_admin('New Deposit', "User #{$uid} submitted deposit of $" . number_format($amount_usd, 2));
+            $user_label = wsi_get_user_label($uid);
+            wsi_notify_admin('New Deposit', "{$user_label} submitted deposit of $" . number_format($amount_usd, 2));
             
             wp_send_json_success(['message' => 'Deposit submitted successfully', 'redirect' => add_query_arg('deposit', 'success', site_url('/wsi/deposit/'))]);
         }
@@ -2941,7 +2955,8 @@ add_action('user_register', function($user_id) {
             error_log("WSI: Deposit inserted successfully - ID: $deposit_id");
             
             wsi_log_tx($uid, $amount_usd, 'deposit_pending', "Deposit #{$deposit_id} submitted");
-            wsi_notify_admin('New Deposit', "User #{$uid} submitted deposit of $" . number_format($amount_usd, 2));
+            $user_label = wsi_get_user_label($uid);
+            wsi_notify_admin('New Deposit', "{$user_label} submitted deposit of $" . number_format($amount_usd, 2));
             
             wp_safe_redirect(add_query_arg('deposit', 'success', $redirect_to));
             exit;
@@ -3016,10 +3031,11 @@ add_action('user_register', function($user_id) {
         }
     }
     
-    $uid    = get_current_user_id();
-    $amount = round(floatval($_POST['amount'] ?? 0), 2);
-    $acct   = sanitize_textarea_field($_POST['account_details'] ?? '');
-    $method = sanitize_text_field($_POST['crypto_type'] ?? '');
+    $uid        = get_current_user_id();
+    $user_label = wsi_get_user_label($uid);
+    $amount     = round(floatval($_POST['amount'] ?? 0), 2);
+    $acct       = sanitize_textarea_field($_POST['account_details'] ?? '');
+    $method     = sanitize_text_field($_POST['crypto_type'] ?? '');
     
     if ($amount <= 0) { 
         if ($is_ajax) {
@@ -3142,7 +3158,7 @@ add_action('user_register', function($user_id) {
     wsi_log_tx($uid, $amount, 'withdraw_request', 'Withdrawal requested');
     wsi_audit($uid, 'withdraw_request', "Requested $amount");
     // Notify admin and user even during AJAX (front-end uses AJAX)
-    wsi_notify_admin('Withdrawal Requested', "User #{$uid} requested withdrawal of $" . number_format($amount, 2));
+    wsi_notify_admin('Withdrawal Requested', "{$user_label} requested withdrawal of $" . number_format($amount, 2));
     wsi_send_email_template($uid, 'email_withdraw_received', ['amount' => $amount]);
 
     // Return response
