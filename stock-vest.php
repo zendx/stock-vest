@@ -1,7 +1,7 @@
     <?php
     /**
      * Plugin Name: WSI — Single-file Investment Plugin
-     * Description: A Wordpress Plugin For Investment and stocks
+     * Description: A self-contained “investment platform” WordPress plugin.
      * Version: 1.0.0
      * Author: HAPPY GILMORE
      * Text Domain: wsi
