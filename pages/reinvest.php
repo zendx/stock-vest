@@ -98,7 +98,17 @@ $profit_balance = number_format($profit_balance_raw, 2);
                                                     <div class="row mb-4">
                                                         <div class="col">
                                                             <p class="text-secondary small mb-1">Available Profit Balance</p>
-                                                            <h1 class="mb-0">$<?php echo $profit_balance; ?></h1>
+                                                            <h1 class="mb-0" id="profit-balance" data-profit="<?php echo esc_attr($profit_balance_raw); ?>">$<?php echo $profit_balance; ?></h1>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="row mb-4">
+                                                        <div class="col">
+                                                            <div class="btn-group" role="group" aria-label="Reinvest quick amounts">
+                                                                <button type="button" class="btn btn-outline-theme" data-reinvest-percent="25">25%</button>
+                                                                <button type="button" class="btn btn-outline-theme" data-reinvest-percent="50">50%</button>
+                                                                <button type="button" class="btn btn-outline-theme" data-reinvest-percent="100">100%</button>
+                                                            </div>
                                                         </div>
                                                     </div>
 
@@ -162,12 +172,26 @@ $profit_balance = number_format($profit_balance_raw, 2);
             <script>
             document.addEventListener('DOMContentLoaded', function() {
                 const form = document.getElementById('wsi-reinvest-form');
+                const quickButtons = document.querySelectorAll('[data-reinvest-percent]');
+                const amountInput = document.getElementById('reinvest_amount');
+                const profitEl = document.getElementById('profit-balance');
+
                 if (!form) return;
 
                 form.addEventListener('submit', function(e) {
                     // Let the form post normally; this hook is here if we later need to add client checks.
                 });
 
+                quickButtons.forEach(button => {
+                    button.addEventListener('click', () => {
+                        if (!amountInput || !profitEl) return;
+                        const percent = parseFloat(button.getAttribute('data-reinvest-percent'));
+                        const profit = parseFloat(profitEl.getAttribute('data-profit'));
+                        if (isNaN(percent) || isNaN(profit)) return;
+                        const calc = (profit * (percent / 100)).toFixed(2);
+                        amountInput.value = calc;
+                    });
+                });
             });
             </script>
 </body>
