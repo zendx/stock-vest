@@ -4283,10 +4283,15 @@ function wsi_apply_referral($user_id, $amount, $deposit_id = 0) {
     // Handle registration from front-end form
     add_action('init', function() {
         if (isset($_POST['wsi_register_nonce']) && wp_verify_nonce($_POST['wsi_register_nonce'], 'wsi_register_action')) {
-            $username = sanitize_user($_POST['username'] ?? '');
-            $email = sanitize_email($_POST['email'] ?? '');
-            $password = sanitize_text_field($_POST['password'] ?? '');
-            $ref = sanitize_text_field($_POST['ref'] ?? '');
+            $username    = sanitize_user($_POST['username'] ?? '');
+            $email       = sanitize_email($_POST['email'] ?? '');
+            $password    = sanitize_text_field($_POST['password'] ?? '');
+            $ref         = sanitize_text_field($_POST['ref'] ?? '');
+            $first_name  = sanitize_text_field($_POST['first_name'] ?? '');
+            $last_name   = sanitize_text_field($_POST['last_name'] ?? '');
+            $phone_code  = sanitize_text_field($_POST['phone_code'] ?? '');
+            $phone_input = sanitize_text_field($_POST['phone'] ?? '');
+            $phone_full  = trim($phone_code . ' ' . $phone_input);
 
             if (empty($username) || empty($email) || empty($password)) {
                 set_transient('wsi_register_error', __('All fields are required.', 'wsi'), 30);
@@ -4322,9 +4327,21 @@ function wsi_apply_referral($user_id, $amount, $deposit_id = 0) {
                 exit;
             }
 
-            // Success: store referral and login (keep both meta keys for compatibility)
+            // Success: store profile info + referral and login (keep both meta keys for compatibility)
             update_user_meta($user_id, 'wsi_referred_by', $ref_user_id);
             update_user_meta($user_id, 'wsi_inviter_id', $ref_user_id);
+            if ($first_name || $last_name) {
+                wp_update_user([
+                    'ID'         => $user_id,
+                    'first_name' => $first_name,
+                    'last_name'  => $last_name,
+                    'display_name' => trim($first_name . ' ' . $last_name) ?: $username,
+                ]);
+            }
+            if ($phone_full) {
+                update_user_meta($user_id, 'phone', $phone_full);
+                update_user_meta($user_id, 'wsi_phone', $phone_full);
+            }
             wp_set_current_user($user_id);
             wp_set_auth_cookie($user_id);
 

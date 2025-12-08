@@ -144,7 +144,7 @@ if (file_exists($wsi_asset_path)) {
 
                                         <div class="input-group mb-3">
                                             <div class="form-floating maxwidth-100">
-                                                <select class="form-select" id="code">
+                                                <select class="form-select" id="code" name="phone_code">
                                                     <option value="+1">+1</option>
                                                     <option value="+7">+7</option>
                                                     <option value="+20">+20</option>
