@@ -3957,7 +3957,8 @@ function wsi_apply_referral($user_id, $amount, $deposit_id = 0) {
     if ($inv1 && $inv1 !== $user_id) {
         $bonus1 = round($amount * 0.10, 2); // 10%
         if ($bonus1 > 0) {
-            wsi_inc_main($inv1, $bonus1);
+            // Credit referral earnings into profit balance
+            wsi_inc_profit($inv1, $bonus1);
             wsi_log_tx($inv1, $bonus1, 'referral_first', "10% from user {$user_id} deposit #{$deposit_id}");
             wsi_notify_user($inv1, 'Referral Bonus', "You received $" . number_format($bonus1, 2) . " for a referral deposit.");
             wsi_audit($inv1, 'referral_first', "Awarded {$bonus1}");
@@ -3969,7 +3970,8 @@ function wsi_apply_referral($user_id, $amount, $deposit_id = 0) {
         if ($inv2 && $inv2 !== $user_id) {
             $bonus2 = round($amount * 0.05, 2); // 5%
             if ($bonus2 > 0) {
-                wsi_inc_main($inv2, $bonus2);
+                // Credit second-level referral into profit balance
+                wsi_inc_profit($inv2, $bonus2);
                 wsi_log_tx($inv2, $bonus2, 'referral_second', "5% from user {$user_id} deposit #{$deposit_id}");
                 wsi_notify_user($inv2, 'Referral Bonus (2nd level)', "You received $" . number_format($bonus2, 2) . " for a second-level referral deposit.");
                 wsi_audit($inv2, 'referral_second', "Awarded {$bonus2}");
