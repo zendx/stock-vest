@@ -149,6 +149,9 @@ $total_pages = ($per_page > 0) ? max(1, ceil($total_stocks / $per_page)) : 1;
             padding: 6px 10px;
             border-radius: 10px;
             white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
         }
         .wsi-change-up {
             color: #0a8f3e;
@@ -196,6 +199,48 @@ $total_pages = ($per_page > 0) ? max(1, ceil($total_stocks / $per_page)) : 1;
             opacity: 0.5;
             pointer-events: none;
         }
+        .wsi-stock-dropdown {
+            width: 100%;
+            border-top: 1px dashed #e5e7eb;
+            margin-top: 10px;
+            padding-top: 10px;
+            display: none;
+        }
+        .wsi-stock-card.open .wsi-stock-dropdown {
+            display: block;
+        }
+        .wsi-qty-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .wsi-qty-row input[type="number"] {
+            width: 120px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 8px 10px;
+        }
+        .wsi-total {
+            font-weight: 800;
+            color: #0f172a;
+        }
+        .wsi-toggle {
+            border: none;
+            background: #f1f5f9;
+            color: #0f172a;
+            border-radius: 10px;
+            padding: 6px 10px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .wsi-arrow-up,
+        .wsi-arrow-down {
+            font-size: 14px;
+        }
+        .wsi-arrow-up { color: #0a8f3e; }
+        .wsi-arrow-down { color: #c0392b; }
     </style>
 
     <script defer src="<?php echo plugin_dir_url(__FILE__) . 'assets/js/app435e.js?v=' . esc_attr($wsi_asset_ver); ?>"></script><link href="<?php echo plugin_dir_url(__FILE__) . 'assets/css/app435e.css?v=' . esc_attr($wsi_asset_ver); ?>" rel="stylesheet">
@@ -235,8 +280,9 @@ $total_pages = ($per_page > 0) ? max(1, ceil($total_stocks / $per_page)) : 1;
                             $change_class = ($change >= 0) ? 'wsi-change-up' : 'wsi-change-down';
                             $change_label = ($change >= 0 ? '+' : '') . number_format($change, 2) . '%';
                             $ticker = strtoupper(substr(preg_replace('/[^A-Za-z0-9]/', '', $s->name), 0, 4)) ?: 'STK' . intval($s->id);
+                            $price = floatval($s->price);
                         ?>
-                        <div class="wsi-stock-card">
+                        <div class="wsi-stock-card" data-stock-id="<?php echo intval($s->id); ?>" data-price="<?php echo esc_attr($price); ?>">
                             <div class="wsi-stock-left">
                                 <div class="wsi-stock-icon">
                                     <?php if (!empty($s->image)) : ?>
@@ -248,19 +294,42 @@ $total_pages = ($per_page > 0) ? max(1, ceil($total_stocks / $per_page)) : 1;
                                 <div class="wsi-stock-meta">
                                     <div class="wsi-stock-name"><?php echo esc_html($s->name); ?></div>
                                     <div class="wsi-stock-ticker"><?php echo esc_html($ticker); ?></div>
-                                    <div class="wsi-stock-period"><?php echo esc_html(ucfirst($s->rate_period ?? '')); ?></div>
                                 </div>
                             </div>
 
                             <div class="wsi-stock-right">
                                 <div class="wsi-stock-price">$<?php echo number_format($s->price, 2); ?></div>
-                                <div class="wsi-stock-change <?php echo esc_attr($change_class); ?>"><?php echo esc_html($change_label); ?></div>
-                                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
-                                    <input type="hidden" name="action" value="wsi_buy_stock">
-                                    <?php wp_nonce_field('wsi_buy_stock_nonce'); ?>
-                                    <input type="hidden" name="stock_id" value="<?php echo intval($s->id); ?>">
-                                    <button class="wsi-buy-btn" type="submit">Buy</button>
-                                </form>
+                                <div class="wsi-stock-change <?php echo esc_attr($change_class); ?>">
+                                    <span class="<?php echo $change >= 0 ? 'wsi-arrow-up' : 'wsi-arrow-down'; ?>"><?php echo $change >= 0 ? '&uarr;' : '&darr;'; ?></span>
+                                    <?php echo esc_html($change_label); ?>
+                                </div>
+                                <button class="wsi-toggle" type="button" aria-expanded="false">Buy</button>
+                            </div>
+
+                            <div class="wsi-stock-dropdown" aria-hidden="true">
+                                <div class="wsi-qty-row">
+                                    <div>
+                                        <div class="wsi-stock-period">Units</div>
+                                        <input type="number" min="1" step="1" value="1" class="wsi-qty-input">
+                                    </div>
+                                    <div>
+                                        <div class="wsi-stock-period">Price / Unit</div>
+                                        <div class="wsi-total">$<?php echo number_format($s->price, 2); ?></div>
+                                    </div>
+                                    <div>
+                                        <div class="wsi-stock-period">Total</div>
+                                        <div class="wsi-total wsi-total-value">$<?php echo number_format($s->price, 2); ?></div>
+                                    </div>
+                                    <div style="margin-left:auto;">
+                                        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" class="wsi-buy-form">
+                                            <input type="hidden" name="action" value="wsi_buy_stock">
+                                            <?php wp_nonce_field('wsi_buy_stock_nonce'); ?>
+                                            <input type="hidden" name="stock_id" value="<?php echo intval($s->id); ?>">
+                                            <input type="hidden" name="units" value="1">
+                                            <button class="wsi-buy-btn" type="submit">Confirm Buy</button>
+                                        </form>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         <?php endforeach; ?>
@@ -292,6 +361,77 @@ $total_pages = ($per_page > 0) ? max(1, ceil($total_stocks / $per_page)) : 1;
 
     <!-- page footer -->
     <?php include_once "assets/inc/footer.php" ?>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const cards = document.querySelectorAll('.wsi-stock-card');
+
+        cards.forEach((card) => {
+            const toggle = card.querySelector('.wsi-toggle');
+            const dropdown = card.querySelector('.wsi-stock-dropdown');
+            const qtyInput = card.querySelector('.wsi-qty-input');
+            const totalEl = card.querySelector('.wsi-total-value');
+            const hiddenUnits = card.querySelector('input[name="units"]');
+            const price = parseFloat(card.dataset.price || '0') || 0;
+            const setHidden = (val) => { if (hiddenUnits) hiddenUnits.value = val; };
+
+            const clampUnits = (val) => {
+                const num = parseInt(val, 10);
+                if (Number.isNaN(num)) return null;
+                return Math.max(1, num);
+            };
+
+            const updateTotal = () => {
+                const raw = qtyInput.value;
+                const units = clampUnits(raw);
+
+                // Allow the field to be temporarily empty while typing on mobile
+                if (units === null) {
+                    setHidden('');
+                    if (totalEl) totalEl.textContent = '$0.00';
+                    return;
+                }
+
+                qtyInput.dataset.lastValid = units;
+                setHidden(units);
+                if (totalEl) totalEl.textContent = '$' + (price * units).toFixed(2);
+            };
+
+            const enforceOnBlur = () => {
+                const fallback = qtyInput.dataset.lastValid || '1';
+                qtyInput.value = fallback;
+                updateTotal();
+            };
+
+            if (toggle && dropdown) {
+                toggle.addEventListener('click', () => {
+                    const open = card.classList.toggle('open');
+                    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+                    dropdown.setAttribute('aria-hidden', open ? 'false' : 'true');
+                    updateTotal();
+                });
+            }
+
+            if (qtyInput) {
+                qtyInput.addEventListener('input', updateTotal);
+                qtyInput.addEventListener('blur', enforceOnBlur);
+                qtyInput.addEventListener('keydown', (e) => {
+                    // Let backspace clear to empty without jumping back to 1
+                    if (e.key === 'Backspace') {
+                        qtyInput.dataset.backspacing = '1';
+                    } else {
+                        delete qtyInput.dataset.backspacing;
+                    }
+                });
+                const form = card.querySelector('.wsi-buy-form');
+                if (form) {
+                    form.addEventListener('submit', () => enforceOnBlur());
+                }
+                updateTotal();
+            }
+        });
+    });
+    </script>
 
 </body>
 

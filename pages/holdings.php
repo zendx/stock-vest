@@ -40,7 +40,7 @@ $holdings = $wpdb->get_results(
             s.name, 
             s.price, 
             s.rate_percent, 
-            s.rate_period
+            s.image
         FROM $t_hold h
         LEFT JOIN $t_stocks s ON s.id = h.stock_id
         WHERE h.user_id = %d
@@ -296,10 +296,13 @@ $total_pages = ($per_page > 0) ? max(1, ceil($total_holdings / $per_page)) : 1;
                             <div class="wsi-holdings-list">
                                 <?php foreach ($holdings as $h): 
                                     $shares = floatval($h->shares ?? 0);
-                                    $unit_price = floatval($h->price ?? 0);
+                                    $current_price = floatval($h->price ?? 0); // current market price
                                     $invested = floatval($h->invested_amount ?? 0);
-                                    $current_value = $shares * $unit_price;
-                                    $profit = $current_value - $invested + floatval($h->accumulated_profit ?? 0);
+                                    $buy_price = ($shares > 0) ? ($invested / $shares) : $current_price; // original purchase price
+                                    $display_total_value = $buy_price * $shares; // show value at buy price to avoid jumping when admin edits price
+                                    // Profit reflects market move (current price vs buy) plus accrued profit
+                                    $profit = (($current_price * $shares) - $invested) + floatval($h->accumulated_profit ?? 0);
+                                    $rate_percent = floatval($h->rate_percent ?? 0);
                                     $profit_pct = ($invested > 0) ? ($profit / $invested * 100) : 0;
                                     $change_class = ($profit >= 0) ? 'wsi-badge-up' : 'wsi-badge-down';
                                     $profit_class = ($profit >= 0) ? 'wsi-text-up' : 'wsi-text-down';
@@ -316,7 +319,7 @@ $total_pages = ($per_page > 0) ? max(1, ceil($total_holdings / $per_page)) : 1;
                                             </div>
                                             <div>
                                                 <div class="wsi-holding-name"><?php echo esc_html($h->name ?? 'Unknown'); ?></div>
-                                                <div class="wsi-holding-sub"><?php echo number_format($shares, 2); ?> units @ $<?php echo number_format($unit_price, 2); ?></div>
+                                                <div class="wsi-holding-sub"><?php echo number_format($shares, 2); ?> units @ $<?php echo number_format($buy_price, 2); ?> per stock (bought)</div>
                                             </div>
                                         </div>
                                         <div class="wsi-holding-change <?php echo esc_attr($change_class); ?>">
@@ -326,16 +329,26 @@ $total_pages = ($per_page > 0) ? max(1, ceil($total_holdings / $per_page)) : 1;
 
                                     <div class="wsi-holding-body">
                                         <div>
-                                            <div class="wsi-holding-label">Invested</div>
-                                            <div class="wsi-holding-value">$<?php echo number_format($invested, 2); ?></div>
+                                            <div class="wsi-holding-label">Price Bought</div>
+                                            <div class="wsi-holding-value">$<?php echo number_format($buy_price, 2); ?></div>
                                         </div>
                                         <div>
-                                            <div class="wsi-holding-label">Current Value</div>
-                                            <div class="wsi-holding-value">$<?php echo number_format($current_value, 2); ?></div>
+                                            <div class="wsi-holding-label">Units</div>
+                                            <div class="wsi-holding-value"><?php echo number_format($shares, 2); ?></div>
+                                        </div>
+                                        <div>
+                                            <div class="wsi-holding-label">Total Value (bought)</div>
+                                            <div class="wsi-holding-value">$<?php echo number_format($display_total_value, 2); ?></div>
                                         </div>
                                         <div>
                                             <div class="wsi-holding-label">Profit/Loss</div>
-                                            <div class="wsi-holding-value <?php echo esc_attr($profit_class); ?>">
+                                            <div 
+                                                class="wsi-holding-value <?php echo esc_attr($profit_class); ?> wsi-profit-live" 
+                                                data-profit-base="<?php echo esc_attr($profit); ?>" 
+                                                data-profit-current="<?php echo esc_attr($profit); ?>"
+                                                data-rate-percent="<?php echo esc_attr($rate_percent); ?>"
+                                                data-invested="<?php echo esc_attr($invested); ?>"
+                                            >
                                                 <?php echo ($profit >= 0 ? '+' : '') . '$' . number_format($profit, 2); ?>
                                             </div>
                                         </div>
@@ -346,6 +359,7 @@ $total_pages = ($per_page > 0) ? max(1, ceil($total_holdings / $per_page)) : 1;
                                             <input type="hidden" name="action" value="wsi_sell_holding">
                                             <?php wp_nonce_field('wsi_sell_holding_nonce'); ?>
                                             <input type="hidden" name="holding_id" value="<?php echo intval($h->id); ?>">
+                                            <input type="hidden" name="profit_live" value="<?php echo esc_attr($profit); ?>" class="wsi-profit-input">
                                             <button class="wsi-sell-btn" type="submit">Sell</button>
                                         </form>
                                     </div>
@@ -395,6 +409,75 @@ $total_pages = ($per_page > 0) ? max(1, ceil($total_holdings / $per_page)) : 1;
 
         if (!holdingsMount) return;
 
+        function formatProfit(val) {
+            const sign = val >= 0 ? '+' : '-';
+            return `${sign}$${Math.abs(val).toFixed(2)}`;
+        }
+
+        function applyProfitClass(el, val) {
+            el.classList.remove('wsi-text-up', 'wsi-text-down');
+            el.classList.add(val >= 0 ? 'wsi-text-up' : 'wsi-text-down');
+        }
+
+        function startProfitTickers(scope) {
+            const targets = (scope || document).querySelectorAll('.wsi-profit-live');
+            targets.forEach((el) => {
+                if (el._wsiTicker) return; // prevent double timers
+
+                let base = parseFloat(el.dataset.profitBase || '0');
+                let current = parseFloat(el.dataset.profitCurrent || '0');
+                const ratePercent = parseFloat(el.dataset.ratePercent || '0');
+                const invested = parseFloat(el.dataset.invested || '0');
+
+                // Keep live movement hovering slightly above/below the admin rate percent
+                const targetPct = (() => {
+                    if (ratePercent !== 0) return ratePercent;
+                    if (invested > 0) return (base / invested) * 100;
+                    return 0;
+                })();
+                const cushionPct = Math.max(Math.abs(targetPct) * 0.12, 0.3); // small cushion around set percent
+                const pctToProfit = (pct) => {
+                    if (invested > 0) return invested * (pct / 100);
+                    if (targetPct !== 0) return base * (pct / targetPct);
+                    return base;
+                };
+                let bandLow = pctToProfit(targetPct - cushionPct);
+                let bandHigh = pctToProfit(targetPct + cushionPct);
+                if (bandLow > bandHigh) [bandLow, bandHigh] = [bandHigh, bandLow];
+
+                const range = Math.max(Math.abs(bandHigh - bandLow), 0.5);
+                const minStep = range * 0.03; // 3% of band
+                const maxStep = range * 0.10; // up to 10% of band
+
+                const directionBias = () => {
+                    if (targetPct > 0) return 0.62;   // favor upward drift
+                    if (targetPct < 0) return 0.38;   // favor downward drift
+                    return 0.5;                       // neutral
+                };
+
+                // Keep current/base inside the band on init
+                const clamp = (v) => Math.min(bandHigh, Math.max(bandLow, v));
+                base = clamp(base);
+                current = clamp(current);
+
+                const tick = () => {
+                    const step = minStep + Math.random() * (maxStep - minStep);
+                    const goUp = Math.random() < directionBias();
+                    let next = current + (goUp ? step : -step);
+                    current = clamp(next);
+                    el.dataset.profitCurrent = current.toString();
+                    el.textContent = formatProfit(current);
+                    applyProfitClass(el, current);
+                    const formInput = el.closest('.wsi-holding-card')?.querySelector('.wsi-profit-input');
+                    if (formInput) formInput.value = current.toFixed(2);
+                    const delay = 1800 + Math.random() * 2200;
+                    el._wsiTicker = setTimeout(tick, delay);
+                };
+
+                tick();
+            });
+        }
+
         fetch(`${apiRoot}/holdings?page=${page}`, {
             headers: {
                 'X-WP-Nonce': nonce
@@ -402,15 +485,18 @@ $total_pages = ($per_page > 0) ? max(1, ceil($total_holdings / $per_page)) : 1;
             credentials: 'same-origin'
         })
         .then(res => res.ok ? res.json() : Promise.reject(res))
-        .then(data => {
-            if (data.items_html) {
-                holdingsMount.innerHTML = data.items_html;
-            }
-            if (paginationMount) {
-                paginationMount.innerHTML = buildPagination(data.page || page, data.total_pages || 1);
-            }
-        })
+            .then(data => {
+                if (data.items_html) {
+                    holdingsMount.innerHTML = data.items_html;
+                    startProfitTickers(holdingsMount);
+                }
+                if (paginationMount) {
+                    paginationMount.innerHTML = buildPagination(data.page || page, data.total_pages || 1);
+                }
+            })
         .catch(err => console.warn('Holdings refresh failed', err));
+
+        startProfitTickers(document);
 
         function buildPagination(current, total) {
             if (!total || total <= 1) return '';

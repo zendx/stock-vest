@@ -74,6 +74,11 @@
     define('WSI_DIR', plugin_dir_path(__FILE__));
     define('WSI_VER', '1.0.3');
 
+    // Load translations for this plugin
+    add_action('plugins_loaded', function () {
+        load_plugin_textdomain('wsi', false, dirname(plugin_basename(__FILE__)) . '/languages');
+    });
+
     /* -------------------------------------------------------------------------
        ACTIVATION / DEACTIVATION
     ------------------------------------------------------------------------- */
@@ -765,7 +770,7 @@ add_action('user_register', function($user_id) {
     }
 
     function wsi_admin_dashboard() {
-        if (!wsi_admin_can()) { wp_die(__('You do not have permission to access this page.')); }
+        if (!wsi_admin_can()) { wp_die(__('You do not have permission to access this page.', 'wsi')); }
         global $wpdb;
         $users_count = count_users();
         $opts = wsi_get_opts();
@@ -785,7 +790,7 @@ add_action('user_register', function($user_id) {
        ADMIN: Users page
     ------------------------------------------------------------------------- */
     function wsi_admin_users() {
-        if (!wsi_admin_can()) { wp_die(__('You do not have permission to access this page.')); }
+        if (!wsi_admin_can()) { wp_die(__('You do not have permission to access this page.', 'wsi')); }
 
         // Handle admin actions
         if (!empty($_POST['action_user']) && check_admin_referer('wsi_users_nonce')) {
@@ -972,7 +977,7 @@ add_action('user_register', function($user_id) {
        ADMIN: Deposits page (pending)
     ------------------------------------------------------------------------- */
     function wsi_admin_deposits() {
-        if (!wsi_admin_can()) { wp_die(__('You do not have permission to access this page.')); }
+        if (!wsi_admin_can()) { wp_die(__('You do not have permission to access this page.', 'wsi')); }
         
         global $wpdb;
         $t = $wpdb->prefix . 'wsi_deposits';
@@ -1139,7 +1144,7 @@ add_action('user_register', function($user_id) {
        ADMIN: Withdrawals page (pending)
     ------------------------------------------------------------------------- */
     function wsi_admin_withdrawals() {
-        if (!wsi_admin_can()) { wp_die(__('You do not have permission to access this page.')); }
+        if (!wsi_admin_can()) { wp_die(__('You do not have permission to access this page.', 'wsi')); }
         
         global $wpdb;
         $t = $wpdb->prefix . 'wsi_withdrawals';
@@ -1364,7 +1369,7 @@ add_action('user_register', function($user_id) {
        ADMIN: Stocks page (complete)
     ------------------------------------------------------------------------- */
     function wsi_admin_stocks() {
-        if (!wsi_admin_can()) { wp_die(__('You do not have permission to access this page.')); }
+        if (!wsi_admin_can()) { wp_die(__('You do not have permission to access this page.', 'wsi')); }
         global $wpdb;
         $table = $wpdb->prefix . 'wsi_stocks';
 
@@ -1412,12 +1417,25 @@ add_action('user_register', function($user_id) {
                 'name'        => sanitize_text_field($_POST['stock_name']),
                 'price'       => floatval($_POST['stock_price']),
                 'rate_percent'     => floatval($_POST['stock_percent']),
-                'rate_period'   => sanitize_text_field($_POST['stock_rate_type']),
+                'rate_period'   => 'daily',
                 'image'       => $image_url, // NEW
                 'created_at'  => current_time('mysql'),
             ]);
 
             echo '<div class="updated"><p>Stock added.</p></div>';
+        }
+
+        // update existing stock price (and optional rate)
+        if (isset($_POST['wsi_update_stock']) && check_admin_referer('wsi_update_stock_nonce')) {
+            $id = intval($_POST['stock_id'] ?? 0);
+            $price_new = isset($_POST['stock_price_new']) ? max(0, floatval($_POST['stock_price_new'])) : null;
+            $rate_new = isset($_POST['stock_percent_new']) ? floatval($_POST['stock_percent_new']) : null;
+            if ($id && $price_new !== null) {
+                $data = ['price' => $price_new];
+                if ($rate_new !== null) $data['rate_percent'] = $rate_new;
+                $wpdb->update($table, $data, ['id' => $id]);
+                echo '<div class="updated"><p>Stock updated.</p></div>';
+            }
         }
 
         // delete
@@ -1436,14 +1454,6 @@ add_action('user_register', function($user_id) {
                     <tr><th>Name</th><td><input type="text" name="stock_name" required></td></tr>
                     <tr><th>Price</th><td><input type="number" step="0.01" name="stock_price" required></td></tr>
                     <tr><th>Interest %</th><td><input type="number" step="0.01" name="stock_percent" required></td></tr>
-                    <tr><th>Rate Type</th>
-                        <td>
-                            <select name="stock_rate_type">
-                                <option value="daily">Daily</option>
-                                <option value="hourly">Hourly</option>
-                            </select>
-                        </td>
-                    </tr>
                     <tr><th>Stock Image<br><small>80×80 px</small></th>
                         <td><input type="file" name="stock_image" accept="image/png, image/jpeg"></td>
                     </tr>
@@ -1452,6 +1462,41 @@ add_action('user_register', function($user_id) {
             </form>
             <hr>
             <h2>Available Stocks</h2>
+            <style>
+                .wsi-admin-stock-form {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 6px;
+                    align-items: center;
+                }
+                .wsi-admin-stock-form label {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 2px;
+                    font-size: 12px;
+                    font-weight: 600;
+                    color: #4a5568;
+                }
+                .wsi-admin-stock-form input[type="number"] {
+                    width: 100px;
+                }
+                .wsi-admin-stock-form select {
+                    width: 90px;
+                }
+                .wsi-admin-stock-actions {
+                    white-space: nowrap;
+                }
+                .wsi-admin-stock-dropdown {
+                    display: none;
+                    margin-top: 6px;
+                    padding: 8px;
+                    background: #f8f9fa;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 6px;
+                }
+                .wsi-admin-stock-dropdown.open { display: block; }
+                .wsi-edit-toggle { margin-bottom: 4px; }
+            </style>
             <?php if ($stocks): ?>
             <table class="widefat fixed striped">
                 <thead>
@@ -1461,8 +1506,8 @@ add_action('user_register', function($user_id) {
                     <th>Name</th>
                     <th>Price</th>
                     <th>%</th>
-                    <th>Rate</th>
                     <th>Date</th>
+                    <th>Update</th>
                     <th></th>
                 </tr>
                 </thead>
@@ -1480,13 +1525,46 @@ add_action('user_register', function($user_id) {
                         <td><?php echo esc_html($s->name); ?></td>
                         <td><?php echo number_format($s->price,2); ?></td>
                         <td><?php echo esc_html($s->rate_percent); ?></td>
-                        <td><?php echo esc_html(ucfirst($s->rate_period)); ?></td>
                         <td><?php echo esc_html($s->created_at); ?></td>
-                        <td><a href="?page=wsi_stocks&del=<?php echo esc_attr($s->id); ?>" onclick="return confirm('Delete this stock?')">Delete</a></td>
+                        <td>
+                            <button type="button" class="button wsi-edit-toggle" data-target="wsi-edit-<?php echo esc_attr($s->id); ?>">Edit</button>
+                            <div id="wsi-edit-<?php echo esc_attr($s->id); ?>" class="wsi-admin-stock-dropdown">
+                                <form method="post" class="wsi-admin-stock-form">
+                                    <?php wp_nonce_field('wsi_update_stock_nonce'); ?>
+                                    <input type="hidden" name="wsi_update_stock" value="1">
+                                    <input type="hidden" name="stock_id" value="<?php echo esc_attr($s->id); ?>">
+                                    <label>
+                                        Price
+                                        <input type="number" step="0.01" min="0" name="stock_price_new" value="<?php echo esc_attr($s->price); ?>">
+                                    </label>
+                                    <label>
+                                        %
+                                        <input type="number" step="0.01" name="stock_percent_new" value="<?php echo esc_attr($s->rate_percent); ?>">
+                                    </label>
+                                    <button class="button button-primary">Save</button>
+                                </form>
+                            </div>
+                        </td>
+                        <td class="wsi-admin-stock-actions"><a href="?page=wsi_stocks&del=<?php echo esc_attr($s->id); ?>" onclick="return confirm('Delete this stock?')">Delete</a></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
             </table>
+            <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                const toggles = document.querySelectorAll('.wsi-edit-toggle');
+                toggles.forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const targetId = btn.getAttribute('data-target');
+                        if (!targetId) return;
+                        const panel = document.getElementById(targetId);
+                        if (!panel) return;
+                        const isOpen = panel.classList.toggle('open');
+                        btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+                    });
+                });
+            });
+            </script>
             <?php else: ?>
                 <p>No stocks yet.</p>
             <?php endif; ?>
@@ -1700,7 +1778,7 @@ add_action('user_register', function($user_id) {
      // Avoid writing options at top-level which would overwrite admin values on every load.
 
     function wsi_admin_settings() {
-        if (!wsi_admin_can()) { wp_die(__('You do not have permission to access this page.')); }
+        if (!wsi_admin_can()) { wp_die(__('You do not have permission to access this page.', 'wsi')); }
 
         $opts = wsi_get_opts();
 
@@ -2022,7 +2100,7 @@ add_action('user_register', function($user_id) {
 
         $invite_link = wsi_get_invite_link($uid);
         $stocks = $wpdb->get_results("SELECT * FROM $t_stocks WHERE active=1 ORDER BY id DESC");
-        $holdings = $wpdb->get_results($wpdb->prepare("SELECT h.*, s.name, s.price, s.rate_percent, s.rate_period FROM $t_hold h LEFT JOIN $t_stocks s ON s.id=h.stock_id WHERE h.user_id=%d AND h.status='open' ORDER BY h.created_at DESC", $uid));
+        $holdings = $wpdb->get_results($wpdb->prepare("SELECT h.*, s.name, s.price, s.rate_percent, s.image FROM $t_hold h LEFT JOIN $t_stocks s ON s.id=h.stock_id WHERE h.user_id=%d AND h.status='open' ORDER BY h.created_at DESC", $uid));
         $txs = $wpdb->get_results($wpdb->prepare("SELECT * FROM $t_tx WHERE user_id=%d ORDER BY created_at DESC LIMIT 50", $uid));
 
         ob_start();
@@ -2570,14 +2648,15 @@ add_action('user_register', function($user_id) {
                         <th>Image</th>
                         <th>Name</th>
                         <th>Price</th>
-                        <th>Rate</th>
-                        <th>Period</th>
+                        <th>%</th>
                         <th>Buy</th>
                       </tr>
                     </thead>
                     <tbody>
                     <?php foreach ($stocks as $s) { ?>
                       <tr>
+                        <td><?php echo esc_html($s->rate_percent ?? "0"); ?>%</td>
+
                         <td>
                           <?php if (!empty($s->image)) { ?>
                             <img src="<?php echo esc_url($s->image); ?>" width="40" height="40" style="border-radius:6px;">
@@ -2588,9 +2667,6 @@ add_action('user_register', function($user_id) {
 
                         <td><?php echo esc_html($s->name); ?></td>
                         <td>$<?php echo number_format($s->price, 2); ?></td>
-                        <td><?php echo esc_html($s->rate_percent ?? "0"); ?>%</td>
-                        <td><?php echo esc_html($s->rate_period ?? "N/A"); ?></td>
-
                         <td>
                           <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
                               <input type="hidden" name="action" value="wsi_buy_stock">
@@ -3648,7 +3724,7 @@ add_action('admin_menu', function() {
 });
 
 function wsi_render_email_log_page() {
-    if (!wsi_admin_can()) { wp_die(__('You do not have permission to access this page.')); }
+    if (!wsi_admin_can()) { wp_die(__('You do not have permission to access this page.', 'wsi')); }
     $log = wsi_get_email_log();
     ?>
     <div class="wrap">
@@ -3842,6 +3918,7 @@ function wsi_render_email_log_page() {
 
         $uid = get_current_user_id();
         $stock_id = intval($_POST['stock_id']);
+        $units = isset($_POST['units']) ? max(1, floatval($_POST['units'])) : 1;
 
         global $wpdb;
         $table_stocks   = $wpdb->prefix . 'wsi_stocks';
@@ -3857,8 +3934,8 @@ function wsi_render_email_log_page() {
             exit;
         }
 
-        // auto-use stock price
-        $amount  = floatval($stock->price);
+        // auto-use stock price and requested quantity
+        $amount  = floatval($stock->price) * $units;
         $balance = floatval(wsi_get_main($uid));
 
         if ($balance < $amount) {
@@ -3906,7 +3983,7 @@ function wsi_render_email_log_page() {
 
         global $wpdb;
         $h = $wpdb->get_row($wpdb->prepare(
-            "SELECT * FROM {$wpdb->prefix}wsi_holdings WHERE id=%d AND user_id=%d AND status='open'", 
+            "SELECT h.*, s.price AS current_price FROM {$wpdb->prefix}wsi_holdings h LEFT JOIN {$wpdb->prefix}wsi_stocks s ON s.id = h.stock_id WHERE h.id=%d AND h.user_id=%d AND h.status='open'", 
             $hid, 
             $uid
         ));
@@ -3916,11 +3993,20 @@ function wsi_render_email_log_page() {
             exit;
         }
 
-        $profit = floatval($h->accumulated_profit);
+        $invested = floatval($h->invested_amount);
+        $shares = floatval($h->shares);
+        $current_price = floatval($h->current_price);
+        $market_value = $shares * $current_price;
+        $profit = $market_value - $invested + floatval($h->accumulated_profit);
+
+        $profit_live = isset($_POST['profit_live']) ? floatval($_POST['profit_live']) : null;
+        if ($profit_live !== null) {
+            $profit = max($profit, $profit_live);
+        }
 
         if ($profit > 0) {
-            wsi_inc_main($uid, $profit);
-            wsi_log_tx($uid, $profit, 'sell_profit', "Sold holding #{$hid} profit transferred");
+            wsi_inc_profit($uid, $profit);
+            wsi_log_tx($uid, $profit, 'sell_profit', "Sold holding #{$hid} profit transferred to profit balance");
         }
 
         $wpdb->update(
@@ -4021,19 +4107,8 @@ function wsi_apply_referral($user_id, $amount, $deposit_id = 0) {
     ------------------------------------------------------------------------- */
     add_action('wsi_hourly_accrue', 'wsi_hourly_accrue_fn');
     function wsi_hourly_accrue_fn() {
-        global $wpdb;
-        $t_hold = $wpdb->prefix . 'wsi_holdings';
-        $t_stocks = $wpdb->prefix . 'wsi_stocks';
-        // apply hourly interest for holdings where stock.rate_period = hourly
-        $rows = $wpdb->get_results("SELECT h.*, s.rate_percent FROM $t_hold h JOIN $t_stocks s ON s.id=h.stock_id WHERE h.status='open' AND s.rate_period='hourly' AND s.active=1");
-        foreach ($rows as $h) {
-            $percent = floatval($h->rate_percent) / 100.0;
-            $add = round(floatval($h->invested_amount) * $percent, 2);
-            if ($add > 0) {
-                $wpdb->update($t_hold, ['accumulated_profit' => floatval($h->accumulated_profit) + $add], ['id' => $h->id]);
-                wsi_log_tx($h->user_id, $add, 'holding_hourly_interest', "Holding #{$h->id} hourly interest");
-            }
-        }
+        // Rate period logic removed; hourly accrual disabled.
+        return;
     }
 
     add_action('wsi_daily_accrue', 'wsi_daily_accrue_fn');
@@ -4071,7 +4146,7 @@ function wsi_apply_referral($user_id, $amount, $deposit_id = 0) {
             SELECT h.*, s.rate_percent 
             FROM $t_hold h 
             JOIN $t_stocks s ON s.id = h.stock_id 
-            WHERE h.status='open' AND s.rate_period='daily' AND s.active=1
+            WHERE h.status='open' AND s.active=1
         ");
 
         foreach ($rows as $h) {
@@ -4199,9 +4274,9 @@ function wsi_apply_referral($user_id, $amount, $deposit_id = 0) {
             $args = [
                 'redirect'        => home_url('/wsi/dashboard/'),
                 'form_id'         => 'wsi-loginform',
-                'label_username'  => __('Username or Email'),
-                'label_password'  => __('Password'),
-                'label_log_in'    => __('Login'),
+                'label_username'  => __('Username or Email', 'wsi'),
+                'label_password'  => __('Password', 'wsi'),
+                'label_log_in'    => __('Login', 'wsi'),
                 'remember'        => true,
             ];
 
