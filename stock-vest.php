@@ -4568,6 +4568,384 @@ function wsi_apply_referral($user_id, $amount, $deposit_id = 0) {
         $sql = $wpdb->prepare("SELECT * FROM {$t} WHERE user_id=%d ORDER BY created_at DESC LIMIT %d", $user_id, intval($limit));
         return $wpdb->get_results($sql);
     }
+
+    /* -------------------------------------------------------------------------
+       REST API (mobile app)
+       Namespace: /wp-json/wsi/v1
+       Provides token-based auth plus balances, stocks, and transactions.
+    ------------------------------------------------------------------------- */
+    function wsi_rest_user_payload($user) {
+        return [
+            'id'    => $user->ID,
+            'name'  => $user->display_name ?: $user->user_login,
+            'email' => $user->user_email,
+        ];
+    }
+
+    function wsi_rest_issue_token($user_id) {
+        $token   = wp_generate_password(48, false, false);
+        $expires = time() + (30 * DAY_IN_SECONDS);
+        update_user_meta($user_id, 'wsi_api_token', $token);
+        update_user_meta($user_id, 'wsi_api_token_expires', $expires);
+        return $token;
+    }
+
+    function wsi_rest_extract_token($request) {
+        $auth = $request->get_header('authorization');
+        if ($auth && stripos($auth, 'bearer ') === 0) {
+            return sanitize_text_field(substr($auth, 7));
+        }
+        $token = $request->get_param('token');
+        return $token ? sanitize_text_field($token) : '';
+    }
+
+    function wsi_rest_find_user_by_token($token) {
+        if (empty($token)) return 0;
+        $users = get_users([
+            'meta_key'     => 'wsi_api_token',
+            'meta_value'   => $token,
+            'number'       => 1,
+            'fields'       => 'ids',
+        ]);
+        if (empty($users)) return 0;
+        $uid     = intval($users[0]);
+        $expires = intval(get_user_meta($uid, 'wsi_api_token_expires', true));
+        if ($expires && $expires < time()) {
+            delete_user_meta($uid, 'wsi_api_token');
+            delete_user_meta($uid, 'wsi_api_token_expires');
+            return 0;
+        }
+        return $uid;
+    }
+
+    function wsi_rest_require_token($request) {
+        $uid = wsi_rest_find_user_by_token(wsi_rest_extract_token($request));
+        if (!$uid) {
+            return new WP_Error('wsi_unauthorized', __('Authentication required.', 'wsi'), ['status' => 401]);
+        }
+        $request->set_param('wsi_user_id', $uid);
+        return true;
+    }
+
+    function wsi_rest_balance_snapshot($uid) {
+        global $wpdb;
+        $assets = wsi_get_main($uid);
+        $profit = wsi_get_profit($uid);
+
+        $t_dep = $wpdb->prefix . 'wsi_deposits';
+        $deposits = $wpdb->get_results(
+            $wpdb->prepare("SELECT amount, created_at FROM $t_dep WHERE user_id=%d AND status='approved'", $uid)
+        );
+
+        $now = current_time('timestamp');
+        $unlock_seconds = 60 * 24 * 60 * 60; // 60 days
+        $unlocked_assets = 0;
+        foreach ($deposits as $d) {
+            if (($now - strtotime($d->created_at)) >= $unlock_seconds) {
+                $unlocked_assets += floatval($d->amount);
+            }
+        }
+
+        $available = $profit + $unlocked_assets;
+        $net = $assets + $profit;
+
+        return [
+            'totalAssets' => round($assets, 2),
+            'profit'      => round($profit, 2),
+            'available'   => round($available, 2),
+            'net'         => round($net, 2),
+        ];
+    }
+
+    add_action('rest_api_init', function () {
+        $ns = 'wsi/v1';
+
+        register_rest_route($ns, '/auth/login', [
+            'methods'             => WP_REST_Server::CREATABLE,
+            'permission_callback' => '__return_true',
+            'callback'            => function (WP_REST_Request $request) {
+                $email    = sanitize_email($request->get_param('email'));
+                $password = $request->get_param('password');
+                if (empty($email) || empty($password)) {
+                    return new WP_Error('wsi_invalid_credentials', __('Email and password are required.', 'wsi'), ['status' => 400]);
+                }
+
+                $user = wp_authenticate($email, $password);
+                if (is_wp_error($user)) {
+                    return new WP_Error('wsi_invalid_credentials', __('Invalid email or password.', 'wsi'), ['status' => 401]);
+                }
+
+                $token = wsi_rest_issue_token($user->ID);
+                return [
+                    'token' => $token,
+                    'user'  => wsi_rest_user_payload($user),
+                ];
+            },
+        ]);
+
+        register_rest_route($ns, '/auth/signup', [
+            'methods'             => WP_REST_Server::CREATABLE,
+            'permission_callback' => '__return_true',
+            'callback'            => function (WP_REST_Request $request) {
+                $name     = sanitize_text_field($request->get_param('name'));
+                $email    = sanitize_email($request->get_param('email'));
+                $password = $request->get_param('password');
+                $phone    = sanitize_text_field($request->get_param('phone'));
+                $referral = sanitize_text_field($request->get_param('referralCode'));
+
+                if (empty($email) || empty($password)) {
+                    return new WP_Error('wsi_invalid_signup', __('Email and password are required.', 'wsi'), ['status' => 400]);
+                }
+                if (email_exists($email)) {
+                    return new WP_Error('wsi_user_exists', __('An account with this email already exists.', 'wsi'), ['status' => 409]);
+                }
+
+                $user_id = wp_create_user($email, $password, $email);
+                if (is_wp_error($user_id)) {
+                    return $user_id;
+                }
+
+                if (!empty($name)) {
+                    wp_update_user(['ID' => $user_id, 'display_name' => $name, 'nickname' => $name]);
+                }
+                if (!empty($phone)) {
+                    update_user_meta($user_id, 'phone', $phone);
+                }
+                if (!empty($referral)) {
+                    update_user_meta($user_id, 'referral_code', $referral);
+                }
+
+                $user  = get_userdata($user_id);
+                $token = wsi_rest_issue_token($user_id);
+
+                return [
+                    'token' => $token,
+                    'user'  => wsi_rest_user_payload($user),
+                ];
+            },
+        ]);
+
+        register_rest_route($ns, '/auth/me', [
+            'methods'             => WP_REST_Server::READABLE,
+            'permission_callback' => 'wsi_rest_require_token',
+            'callback'            => function (WP_REST_Request $request) {
+                $uid = intval($request->get_param('wsi_user_id'));
+                $user = get_userdata($uid);
+                if (!$user) {
+                    return new WP_Error('wsi_not_found', __('User not found', 'wsi'), ['status' => 404]);
+                }
+                return wsi_rest_user_payload($user);
+            },
+        ]);
+
+        register_rest_route($ns, '/balances', [
+            'methods'             => WP_REST_Server::READABLE,
+            'permission_callback' => 'wsi_rest_require_token',
+            'callback'            => function (WP_REST_Request $request) {
+                $uid = intval($request->get_param('wsi_user_id'));
+                return wsi_rest_balance_snapshot($uid);
+            },
+        ]);
+
+        register_rest_route($ns, '/stocks', [
+            'methods'             => WP_REST_Server::READABLE,
+            'permission_callback' => 'wsi_rest_require_token',
+            'callback'            => function (WP_REST_Request $request) {
+                global $wpdb;
+                $t = $wpdb->prefix . 'wsi_stocks';
+                $rows = $wpdb->get_results("SELECT id, name, price, rate_percent, rate_period FROM {$t} WHERE active = 1 ORDER BY created_at DESC");
+                $stocks = [];
+                foreach ($rows as $row) {
+                    $rate = floatval($row->rate_percent);
+                    $stocks[] = [
+                        'id'     => strval($row->id),
+                        'name'   => $row->name,
+                        'price'  => '$' . number_format(floatval($row->price), 2),
+                        'rate'   => ($rate >= 0 ? '+' : '') . round($rate, 2) . '%',
+                        'status' => $row->rate_period,
+                    ];
+                }
+                return $stocks;
+            },
+        ]);
+
+        register_rest_route($ns, '/transactions', [
+            'methods'             => WP_REST_Server::READABLE,
+            'permission_callback' => 'wsi_rest_require_token',
+            'callback'            => function (WP_REST_Request $request) {
+                global $wpdb;
+                $uid = intval($request->get_param('wsi_user_id'));
+                $t = $wpdb->prefix . 'wsi_transactions';
+                $rows = $wpdb->get_results(
+                    $wpdb->prepare("SELECT id, amount, type, description, created_at FROM {$t} WHERE user_id=%d ORDER BY created_at DESC LIMIT 100", $uid)
+                );
+
+                $map_status = function ($type) {
+                    $type = strtolower($type);
+                    if (strpos($type, 'pending') !== false) return 'pending';
+                    if (strpos($type, 'declined') !== false) return 'failed';
+                    if (strpos($type, 'approved') !== false) return 'approved';
+                    return 'processing';
+                };
+
+                $tx = [];
+                foreach ($rows as $row) {
+                    $tx[] = [
+                        'id'     => strval($row->id),
+                        'type'   => $row->type,
+                        'title'  => ucwords(str_replace('_', ' ', $row->type)),
+                        'amount' => '$' . number_format(floatval($row->amount), 2),
+                        'date'   => mysql2date('Y-m-d H:i', $row->created_at),
+                        'status' => $map_status($row->type),
+                        'note'   => $row->description,
+                    ];
+                }
+                return $tx;
+            },
+        ]);
+
+        register_rest_route($ns, '/holdings', [
+            'methods'             => WP_REST_Server::READABLE,
+            'permission_callback' => 'wsi_rest_require_token',
+            'callback'            => function (WP_REST_Request $request) {
+                global $wpdb;
+                $uid = intval($request->get_param('wsi_user_id'));
+                $t_hold = $wpdb->prefix . 'wsi_holdings';
+                $t_stocks = $wpdb->prefix . 'wsi_stocks';
+                $rows = $wpdb->get_results(
+                    $wpdb->prepare(
+                        "SELECT h.id, h.stock_id, h.invested_amount, h.shares, h.accumulated_profit, h.status, h.created_at, s.name, s.price, s.rate_percent, s.image
+                         FROM {$t_hold} h
+                         LEFT JOIN {$t_stocks} s ON s.id = h.stock_id
+                         WHERE h.user_id=%d
+                         ORDER BY h.created_at DESC",
+                        $uid
+                    )
+                );
+
+                $data = [];
+                foreach ($rows as $row) {
+                    $rate = floatval($row->rate_percent);
+                    $price = floatval($row->price);
+                    $data[] = [
+                        'id'            => strval($row->id),
+                        'stockId'       => strval($row->stock_id),
+                        'name'          => $row->name,
+                        'invested'      => '$' . number_format(floatval($row->invested_amount), 2),
+                        'shares'        => number_format(floatval($row->shares), 4),
+                        'profit'        => '$' . number_format(floatval($row->accumulated_profit), 2),
+                        'rate'          => ($rate >= 0 ? '+' : '') . round($rate, 2) . '%',
+                        'status'        => $row->status,
+                        'createdAt'     => mysql2date('Y-m-d H:i', $row->created_at),
+                        'currentPrice'  => $price ? '$' . number_format($price, 2) : null,
+                        'image'         => $row->image,
+                    ];
+                }
+                return $data;
+            },
+        ]);
+
+        register_rest_route($ns, '/profile', [
+            'methods'             => WP_REST_Server::READABLE,
+            'permission_callback' => 'wsi_rest_require_token',
+            'callback'            => function (WP_REST_Request $request) {
+                $uid = intval($request->get_param('wsi_user_id'));
+                $user = get_userdata($uid);
+                if (!$user) {
+                    return new WP_Error('wsi_not_found', __('User not found', 'wsi'), ['status' => 404]);
+                }
+                $meta = function ($key) use ($uid) {
+                    return get_user_meta($uid, $key, true);
+                };
+                $sf_raw = get_user_meta($uid, 'wsi_smart_farming', true);
+                $sf_on = in_array(strtolower((string)$sf_raw), ['yes', 'on', '1', 'true'], true);
+
+                return [
+                    'email'      => $user->user_email,
+                    'name'       => $user->display_name,
+                    'firstName'  => $meta('first_name'),
+                    'lastName'   => $meta('last_name'),
+                    'phone'      => $meta('phone'),
+                    'birthDate'  => $meta('birth_date'),
+                    'address1'   => $meta('address1'),
+                    'address2'   => $meta('address2'),
+                    'landmark'   => $meta('landmark'),
+                    'street'     => $meta('street'),
+                    'country'    => $meta('country'),
+                    'state'      => $meta('state'),
+                    'city'       => $meta('city'),
+                    'zip'        => $meta('zip'),
+                    'smartFarming' => $sf_on,
+                ];
+            },
+        ]);
+
+        register_rest_route($ns, '/profile', [
+            'methods'             => WP_REST_Server::CREATABLE,
+            'permission_callback' => 'wsi_rest_require_token',
+            'callback'            => function (WP_REST_Request $request) {
+                $uid = intval($request->get_param('wsi_user_id'));
+                $user = get_userdata($uid);
+                if (!$user) {
+                    return new WP_Error('wsi_not_found', __('User not found', 'wsi'), ['status' => 404]);
+                }
+
+                $payload = $request->get_json_params();
+                $fields = [
+                    'first_name',
+                    'last_name',
+                    'phone',
+                    'birth_date',
+                    'address1',
+                    'address2',
+                    'landmark',
+                    'street',
+                    'country',
+                    'state',
+                    'city',
+                    'zip',
+                    'smart_farming',
+                ];
+
+                foreach ($fields as $field) {
+                    if (isset($payload[$field])) {
+                        if ($field === 'smart_farming') {
+                            $val = strtolower(trim((string)$payload[$field]));
+                            $active = in_array($val, ['yes', 'on', '1', 'true'], true);
+                            update_user_meta($uid, 'wsi_smart_farming', $active ? 'yes' : 'no');
+                        } else {
+                            update_user_meta($uid, $field, sanitize_text_field($payload[$field]));
+                        }
+                    }
+                }
+
+                if (!empty($payload['first_name']) || !empty($payload['last_name'])) {
+                    $display = trim(($payload['first_name'] ?? '') . ' ' . ($payload['last_name'] ?? ''));
+                    if (!empty($display)) {
+                        wp_update_user(['ID' => $uid, 'display_name' => $display]);
+                    }
+                }
+
+                return [
+                    'success' => true,
+                    'profile' => [
+                        'firstName' => get_user_meta($uid, 'first_name', true),
+                        'lastName'  => get_user_meta($uid, 'last_name', true),
+                        'phone'     => get_user_meta($uid, 'phone', true),
+                        'birthDate' => get_user_meta($uid, 'birth_date', true),
+                        'address1'  => get_user_meta($uid, 'address1', true),
+                        'address2'  => get_user_meta($uid, 'address2', true),
+                        'landmark'  => get_user_meta($uid, 'landmark', true),
+                        'street'    => get_user_meta($uid, 'street', true),
+                        'country'   => get_user_meta($uid, 'country', true),
+                        'state'     => get_user_meta($uid, 'state', true),
+                        'city'      => get_user_meta($uid, 'city', true),
+                        'zip'       => get_user_meta($uid, 'zip', true),
+                    ],
+                ];
+            },
+        ]);
+    });
     /* Add Routes ------------------------/
     -------------------------------------*/
     add_action('init', function () {
