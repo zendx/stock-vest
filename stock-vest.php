@@ -1,7 +1,7 @@
-    <?php
+﻿    <?php
     /**
-     * Plugin Name: WSI — Single-file Investment Plugin
-     * Description: A self-contained “investment platform” WordPress plugin.
+     * Plugin Name: WSI - Single-file Investment Plugin
+     * Description: A self-contained â€œinvestment platformâ€ WordPress plugin.
      * Version: 1.0.0
      * Author: HAPPY GILMORE
      * Text Domain: wsi
@@ -10,7 +10,7 @@
     if (!defined('ABSPATH')) exit;
 
     /* -------------------------------------------------------------------------
-       HARD PROTECTION — Prevent ANY ALTER TABLE or SHOW COLUMNS
+       HARD PROTECTION - Prevent ANY ALTER TABLE or SHOW COLUMNS
        unless the deposits table actually exists.
     ------------------------------------------------------------------------- */
     if (!function_exists('wsi_table_exists')) {
@@ -46,10 +46,13 @@
                 // keep names safe: add if plugin expects crypto_wallet somewhere
                 $wpdb->query("ALTER TABLE `$t_dep` ADD COLUMN `crypto_wallet` VARCHAR(255) NULL DEFAULT NULL");
             }
+            if (!in_array('approved_at', (array)$cols, true)) {
+                $wpdb->query("ALTER TABLE `$t_dep` ADD COLUMN `approved_at` DATETIME NULL DEFAULT NULL");
+            }
 
         }
 
-        // Withdrawals table checks (NEW — fixes your 500s)
+        // Withdrawals table checks (NEW - fixes your 500s)
         $t_w = $wpdb->prefix . 'wsi_withdrawals';
         $table_exists_w = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $t_w));
         if ($table_exists_w === $t_w) {
@@ -72,7 +75,7 @@
     ------------------------------------------------------------------------- */
     define('WSI_FILE', __FILE__);
     define('WSI_DIR', plugin_dir_path(__FILE__));
-    define('WSI_VER', '1.0.3');
+    define('WSI_VER', '1.0.4');
 
     // Load translations for this plugin
     add_action('plugins_loaded', function () {
@@ -168,6 +171,9 @@
         if (!in_array('wallet', (array)$cols, true)) {
             $wpdb->query("ALTER TABLE `$t` ADD COLUMN wallet VARCHAR(255) DEFAULT '' AFTER payment_type");
         }
+        if (!in_array('approved_at', (array)$cols, true)) {
+            $wpdb->query("ALTER TABLE `$t` ADD COLUMN approved_at DATETIME NULL DEFAULT NULL AFTER status");
+        }
 
         if (!in_array('method', (array)$cols, true)) {
             $wpdb->query("ALTER TABLE `$t` ADD COLUMN method VARCHAR(80) DEFAULT '' AFTER wallet");
@@ -209,6 +215,7 @@
           crypto_wallet VARCHAR(255) DEFAULT '',
           method VARCHAR(80) DEFAULT '',
           status VARCHAR(32) DEFAULT 'pending',
+          approved_at DATETIME DEFAULT NULL,
           token VARCHAR(128) DEFAULT '',
           admin_note TEXT,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -317,6 +324,7 @@
             'amount_local' => "ALTER TABLE $table ADD COLUMN amount_local DECIMAL(14,2) DEFAULT 0 AFTER amount",
             'payment_type' => "ALTER TABLE $table ADD COLUMN payment_type VARCHAR(80) NOT NULL AFTER amount_local",
             'wallet'       => "ALTER TABLE $table ADD COLUMN wallet VARCHAR(150) AFTER payment_type",
+            'approved_at'  => "ALTER TABLE $table ADD COLUMN approved_at DATETIME NULL DEFAULT NULL AFTER status",
         ];
 
         // Add each missing column safely
@@ -339,6 +347,13 @@
         $opts = wsi_get_opts();
         $opts[$k] = $v;
         update_option('wsi_options', $opts);
+    }
+
+    function wsi_get_deposit_unlock_days() {
+        $opts = wsi_get_opts();
+        $days = isset($opts['deposit_unlock_days']) ? intval($opts['deposit_unlock_days']) : 60;
+        if ($days < 0) $days = 0;
+        return $days;
     }
 
     /* -------------------------------------------------------------------------
@@ -996,9 +1011,12 @@ add_action('user_register', function($user_id) {
                     // Update status
                     $updated = $wpdb->update(
                         $t, 
-                        ['status' => 'approved'], 
+                        [
+                            'status' => 'approved',
+                            'approved_at' => current_time('mysql'),
+                        ], 
                         ['id' => $id],
-                        ['%s'],
+                        ['%s', '%s'],
                         ['%d']
                     );
                     
@@ -1094,7 +1112,7 @@ add_action('user_register', function($user_id) {
                             'usdt'     => 'USDT'
                         ];
                         $walletCode = $r->crypto_wallet ?? '';
-                        $walletLabel = $walletLabels[$walletCode] ?? ($walletCode ?: '—');
+                        $walletLabel = $walletLabels[$walletCode] ?? ($walletCode ?: '-');
                     ?>
                         <tr>
                             <td><?php echo intval($r->id); ?></td>
@@ -1118,14 +1136,14 @@ add_action('user_register', function($user_id) {
                                     <?php wp_nonce_field('wsi_deposits_nonce'); ?>
                                     <input type="hidden" name="deposit_id" value="<?php echo intval($r->id); ?>">
                                     <button name="action_deposit" value="approve" class="button button-primary">
-                                        ✓ Approve
+                                        Approve
                                     </button>
                                 </form>
                                 <form method="post" style="display:inline;margin-left:5px;" onsubmit="return confirm('Decline this deposit?');">
                                     <?php wp_nonce_field('wsi_deposits_nonce'); ?>
                                     <input type="hidden" name="deposit_id" value="<?php echo intval($r->id); ?>">
                                     <button name="action_deposit" value="decline" class="button">
-                                        ✗ Decline
+                                        Decline
                                     </button>
                                 </form>
                             </td>
@@ -1251,7 +1269,7 @@ add_action('user_register', function($user_id) {
                             <td>
                                 <?php echo esc_html($u ? $u->user_login : 'User #' . $r->user_id); ?>
                                 <?php if (!$u) { ?>
-                                    <br><small style="color:red;">⚠ User not found</small>
+                                    <br><small style="color:red;">âš  User not found</small>
                                 <?php } ?>
                             </td>
                             <td><?php echo esc_html($u ? $u->user_email : 'N/A'); ?></td>
@@ -1265,10 +1283,10 @@ add_action('user_register', function($user_id) {
                             <td><?php echo esc_html(date('M j, Y g:i A', strtotime($r->created_at))); ?></td>
                             <td>
                                 <button class="button button-primary wsi-admin-approve-btn" data-id="<?php echo intval($r->id); ?>" data-nonce="<?php echo wp_create_nonce('wsi_withdraws_nonce'); ?>" onclick="wsiAdminApproveWithdrawal(this)">
-                                    ✓ Approve
+                                    Approve
                                 </button>
                                 <button class="button wsi-admin-decline-btn" data-id="<?php echo intval($r->id); ?>" data-nonce="<?php echo wp_create_nonce('wsi_withdraws_nonce'); ?>" onclick="wsiAdminDeclineWithdrawal(this)" style="margin-left:5px;">
-                                    ✗ Decline & Refund
+                                    Decline & Refund
                                 </button>
                             </td>
                         </tr>
@@ -1316,13 +1334,13 @@ add_action('user_register', function($user_id) {
                 } else {
                     alert('Error: ' + (d.data?.message || 'Unknown error'));
                     btn.disabled = false;
-                    btn.textContent = '✓ Approve';
+                    btn.textContent = 'Approve';
                 }
             })
             .catch(e => {
                 alert('Error: ' + e.message);
                 btn.disabled = false;
-                btn.textContent = '✓ Approve';
+                btn.textContent = 'Approve';
             });
         }
         
@@ -1351,13 +1369,13 @@ add_action('user_register', function($user_id) {
                 } else {
                     alert('Error: ' + (d.data?.message || 'Unknown error'));
                     btn.disabled = false;
-                    btn.textContent = '✗ Decline & Refund';
+                    btn.textContent = 'Decline & Refund';
                 }
             })
             .catch(e => {
                 alert('Error: ' + e.message);
                 btn.disabled = false;
-                btn.textContent = '✗ Decline & Refund';
+                btn.textContent = 'Decline & Refund';
             });
         }
         </script>
@@ -1404,7 +1422,7 @@ add_action('user_register', function($user_id) {
                                 echo '<div class="error"><p>Image upload error: ' . esc_html($upload['error']) . '</p></div>';
                             }
                         } else {
-                            echo '<div class="error"><p>Image must be exactly 80×80 pixels.</p></div>';
+                            echo '<div class="error"><p>Image must be exactly 80Ã—80 pixels.</p></div>';
                         }
                     }
                 } else {
@@ -1454,7 +1472,7 @@ add_action('user_register', function($user_id) {
                     <tr><th>Name</th><td><input type="text" name="stock_name" required></td></tr>
                     <tr><th>Price</th><td><input type="number" step="0.01" name="stock_price" required></td></tr>
                     <tr><th>Interest %</th><td><input type="number" step="0.01" name="stock_percent" required></td></tr>
-                    <tr><th>Stock Image<br><small>80×80 px</small></th>
+                    <tr><th>Stock Image<br><small>80Ã—80 px</small></th>
                         <td><input type="file" name="stock_image" accept="image/png, image/jpeg"></td>
                     </tr>
                 </table>
@@ -1519,7 +1537,7 @@ add_action('user_register', function($user_id) {
                             <?php if (!empty($s->image)): ?>
                                 <img src="<?php echo esc_url($s->image); ?>" width="40" height="40" style="border-radius:4px;">
                             <?php else: ?>
-                                —
+                                -
                             <?php endif; ?>
                         </td>
                         <td><?php echo esc_html($s->name); ?></td>
@@ -1790,6 +1808,8 @@ add_action('user_register', function($user_id) {
             $manual = sanitize_textarea_field($_POST['manual_payment_info'] ?? '');
             $email = !empty($_POST['email_notifications']) ? 1 : 0;
             $exchange_rate = floatval($_POST['exchange_rate'] ?? ($opts['exchange_rate'] ?? 1000));
+            $unlock_days = intval($_POST['deposit_unlock_days'] ?? ($opts['deposit_unlock_days'] ?? 60));
+            if ($unlock_days < 0) $unlock_days = 0;
 
             wsi_update_opt('main_daily_percent', $daily);
             wsi_update_opt('min_invest', $min);
@@ -1797,6 +1817,7 @@ add_action('user_register', function($user_id) {
             wsi_update_opt('manual_payment_info', $manual);
             wsi_update_opt('email_notifications', $email);
             wsi_update_opt('exchange_rate', $exchange_rate);
+            wsi_update_opt('deposit_unlock_days', $unlock_days);
 
             $naira_info = sanitize_textarea_field($_POST['naira_payment_info'] ?? '');
             $usdt_trc_wallet = sanitize_text_field($_POST['usdt_trc_wallet'] ?? '');
@@ -1867,6 +1888,10 @@ add_action('user_register', function($user_id) {
             <tr><th>Exchange rate ($ per $1)</th>
                 <td><input name="exchange_rate" type="number" step="0.01" value="<?php echo esc_attr($opts['exchange_rate'] ?? 1000); ?>"> 
                 <small>How many Naira equals $1</small></td></tr>
+
+            <tr><th>Deposit unlock days</th>
+                <td><input name="deposit_unlock_days" type="number" min="0" step="1" value="<?php echo esc_attr($opts['deposit_unlock_days'] ?? 60); ?>">
+                <small>Days after deposit before assets are withdrawable.</small></td></tr>
 
             <tr><th>Deposit mode</th>
                 <td><select name="deposit_mode">
@@ -2074,24 +2099,30 @@ add_action('user_register', function($user_id) {
         // Net margin = assets + profit income
         $net_margin = $assets + $profit_income;
 
-        // Compute available balance for 60+ day old deposits
+        // Compute available balance for unlocked deposits
         $deposits = $wpdb->get_results(
-            $wpdb->prepare("SELECT amount, created_at FROM $t_dep WHERE user_id=%d AND status='approved'", $uid)
+            $wpdb->prepare("SELECT amount, created_at, approved_at FROM $t_dep WHERE user_id=%d AND status='approved'", $uid)
         );
 
         $now = current_time('timestamp');
-        $unlock_seconds = 60 * 24 * 60 * 60;
+        $unlock_days = wsi_get_deposit_unlock_days();
+        $unlock_seconds = $unlock_days * 24 * 60 * 60;
 
+        $approved_total = 0;
         $unlocked_assets = 0;
         foreach ($deposits as $d) {
-            $created = strtotime($d->created_at);
-            if (($now - $created) >= $unlock_seconds) {
-                $unlocked_assets += floatval($d->amount);
+            $amount_dep = floatval($d->amount);
+            $approved_total += $amount_dep;
+            $unlock_date = $d->approved_at ?: $d->created_at;
+            if (($now - strtotime($unlock_date)) >= $unlock_seconds) {
+                $unlocked_assets += $amount_dep;
             }
         }
 
-        // Available = profit + unlocked deposits
-        $available_balance = $profit_income + $unlocked_assets;
+        // Available = profit + unlocked portion of main balance (locked deposits remain locked)
+        $locked_assets = max(0, $approved_total - $unlocked_assets);
+        $unlocked_available = max(0, $assets - $locked_assets);
+        $available_balance = $profit_income + $unlocked_available;
 
         $assets = number_format($assets, 2);
         $profit_income = number_format($profit_income, 2);
@@ -2203,7 +2234,13 @@ add_action('user_register', function($user_id) {
               </script>
 
 
-              <p><em>*Assets cannot be withdrawn until 60 days after deposit. Only Profit Income is withdrawable before the 60-day period.</em></p>
+              <?php
+              $unlock_days = wsi_get_deposit_unlock_days();
+              $unlock_label = ($unlock_days === 1) ? 'day' : 'days';
+              $unlock_phrase = $unlock_days . ' ' . $unlock_label;
+              $unlock_compound = $unlock_days . '-' . $unlock_label;
+              ?>
+              <p><em>*Assets cannot be withdrawn until <?php echo esc_html($unlock_phrase); ?> after deposit. Only Profit Income is withdrawable before the <?php echo esc_html($unlock_compound); ?> period.</em></p>
 
               <p>
                   <label>Your invite link</label>
@@ -2234,7 +2271,7 @@ add_action('user_register', function($user_id) {
 
           <div id="naira_section">
             <div>
-              <label>Enter amount (₦):</label><br>
+              <label>Enter amount (â‚¦):</label><br>
               <input name="amount_naira" id="amount_naira" type="number" min="0" value="<?php echo esc_attr($opts['min_invest'] ?? 50) * ($opts['exchange_rate'] ?? 1000); ?>" style="width:160px;">
             </div>
             <div>
@@ -2242,7 +2279,7 @@ add_action('user_register', function($user_id) {
               <input type="text" id="amount_usd_display" readonly style="width:160px;">
             </div>
             <input type="hidden" name="amount" id="amount_usd" value="">
-            <div id="rate_info">Exchange Rate: $1 = ₦<?php echo esc_html(number_format($opts['exchange_rate'] ?? 1000,2)); ?></div>
+            <div id="rate_info">Exchange Rate: $1 = â‚¦<?php echo esc_html(number_format($opts['exchange_rate'] ?? 1000,2)); ?></div>
             <div id="naira_instructions"><?php echo nl2br(esc_html($opts['naira_payment_info'] ?? $opts['manual_payment_info'] ?? '')); ?></div>
           </div>
 
@@ -2503,7 +2540,7 @@ add_action('user_register', function($user_id) {
         <script>
         jQuery(function($) {
 
-            // Global event delegation – survives Elementor refresh
+            // Global event delegation â€“ survives Elementor refresh
             $(document).off("click.wsiDeposit").on("click.wsiDeposit", "#wsi_deposit_submit", function(e) {
                 e.preventDefault();
 
@@ -2837,9 +2874,9 @@ add_action('user_register', function($user_id) {
                 <table class="widefat">
                     <thead>
                         <tr>
-                            <th><a href="<?php echo $build_qs(['orderby' => 'created_at', 'order' => ($orderby === 'created_at' && $order === 'DESC') ? 'ASC' : 'DESC', 'pg' => 1]); ?>">When<?php echo ($orderby === 'created_at') ? ($order === 'DESC' ? ' ↓' : ' ↑') : ''; ?></a></th>
-                            <th><a href="<?php echo $build_qs(['orderby' => 'amount', 'order' => ($orderby === 'amount' && $order === 'DESC') ? 'ASC' : 'DESC', 'pg' => 1]); ?>">Amount<?php echo ($orderby === 'amount') ? ($order === 'DESC' ? ' ↓' : ' ↑') : ''; ?></a></th>
-                            <th><a href="<?php echo $build_qs(['orderby' => 'type', 'order' => ($orderby === 'type' && $order === 'DESC') ? 'ASC' : 'DESC', 'pg' => 1]); ?>">Type<?php echo ($orderby === 'type') ? ($order === 'DESC' ? ' ↓' : ' ↑') : ''; ?></a></th>
+                            <th><a href="<?php echo $build_qs(['orderby' => 'created_at', 'order' => ($orderby === 'created_at' && $order === 'DESC') ? 'ASC' : 'DESC', 'pg' => 1]); ?>">When<?php echo ($orderby === 'created_at') ? ($order === 'DESC' ? ' â†“' : ' â†‘') : ''; ?></a></th>
+                            <th><a href="<?php echo $build_qs(['orderby' => 'amount', 'order' => ($orderby === 'amount' && $order === 'DESC') ? 'ASC' : 'DESC', 'pg' => 1]); ?>">Amount<?php echo ($orderby === 'amount') ? ($order === 'DESC' ? ' â†“' : ' â†‘') : ''; ?></a></th>
+                            <th><a href="<?php echo $build_qs(['orderby' => 'type', 'order' => ($orderby === 'type' && $order === 'DESC') ? 'ASC' : 'DESC', 'pg' => 1]); ?>">Type<?php echo ($orderby === 'type') ? ($order === 'DESC' ? ' â†“' : ' â†‘') : ''; ?></a></th>
                             <th>Desc</th>
                         </tr>
                     </thead>
@@ -2968,7 +3005,15 @@ add_action('user_register', function($user_id) {
             $user_label = wsi_get_user_label($uid);
             wsi_notify_admin('New Deposit', "{$user_label} submitted deposit of $" . number_format($amount_usd, 2));
             
-            wp_send_json_success(['message' => 'Deposit submitted successfully', 'redirect' => add_query_arg('deposit', 'success', site_url('/wsi/deposit/'))]);
+            wp_send_json_success([
+                'message' => 'Deposit submitted successfully',
+                'redirect' => add_query_arg('deposit', 'success', site_url('/wsi/deposit/')),
+                'redirect_to' => add_query_arg('deposit', 'success', site_url('/wsi/deposit/')),
+                'deposit_id' => $deposit_id,
+                'amount_usd' => $amount_usd,
+                'amount_local' => $amount_local,
+                'payment_type' => $payment_type,
+            ]);
         }
         
         // Legacy fallback for non-AJAX requests
@@ -3125,21 +3170,26 @@ add_action('user_register', function($user_id) {
     global $wpdb;
     
     /* ------------------------------------------------------
-       1. Calculate UNLOCKED deposits (60-day rule)
+       1. Calculate UNLOCKED deposits (unlock rule)
     ------------------------------------------------------- */
     $t_dep = $wpdb->prefix . 'wsi_deposits';
     $deps = $wpdb->get_results($wpdb->prepare(
-        "SELECT amount, created_at FROM $t_dep WHERE user_id=%d AND status='approved'",
+        "SELECT amount, created_at, approved_at FROM $t_dep WHERE user_id=%d AND status='approved'",
         $uid
     ));
     
     $now = current_time('timestamp');
-    $unlock_seconds = 60 * 24 * 60 * 60; // 60 days
+    $unlock_days = wsi_get_deposit_unlock_days();
+    $unlock_seconds = $unlock_days * 24 * 60 * 60;
+    $approved_total = 0;
     $unlocked = 0;
     
     foreach ($deps as $d) {
-        if (($now - strtotime($d->created_at)) >= $unlock_seconds) {
-            $unlocked += floatval($d->amount);
+        $amount_dep = floatval($d->amount);
+        $approved_total += $amount_dep;
+        $unlock_date = $d->approved_at ?: $d->created_at;
+        if (($now - strtotime($unlock_date)) >= $unlock_seconds) {
+            $unlocked += $amount_dep;
         }
     }
     
@@ -3157,7 +3207,10 @@ add_action('user_register', function($user_id) {
     /* ------------------------------------------------------
        3. Total available = unlocked deposits + profit
     ------------------------------------------------------- */
-    $available = $unlocked + $total_profit;
+    // Available = profit + unlocked portion of main balance (locked deposits remain locked)
+    $locked_assets = max(0, $approved_total - $unlocked);
+    $unlocked_available = max(0, wsi_get_main($uid) - $locked_assets);
+    $available = $unlocked_available + $total_profit;
     
     if ($amount > $available) {
         if ($is_ajax) {
@@ -3673,6 +3726,7 @@ function wsi_send_email_template($user_id, $template_key, $vars = []) {
     ];
 
     $subject = $opts[$template_key . '_subject'] ?? ($defaults[$template_key . '_subject'] ?? 'WSI Notification');
+    $subject = str_replace(array_keys($replacements), array_values($replacements), $subject);
 
     $sent = false;
     try {
@@ -3823,6 +3877,28 @@ function wsi_render_email_log_page() {
             exit; 
         }
 
+        // Create an approved deposit entry so reinvested funds follow deposit lock rules
+        $t_deposits = $wpdb->prefix . 'wsi_deposits';
+        $approved_at = current_time('mysql');
+        $inserted = $wpdb->insert(
+            $t_deposits,
+            [
+                'user_id'      => $uid,
+                'amount'       => $amount,
+                'amount_local' => 0,
+                'payment_type' => 'reinvest',
+                'crypto_wallet' => '',
+                'status'       => 'approved',
+                'approved_at'  => $approved_at,
+                'created_at'   => $approved_at
+            ],
+            ['%d', '%f', '%f', '%s', '%s', '%s', '%s', '%s']
+        );
+
+        if ($inserted === false) {
+            wsi_popup("Reinvest Error", $dash_url); 
+            exit; 
+        }
         // Deduct from meta profit first, then accumulated_profit in holdings (FIFO), mirroring display logic
         $remaining = $amount;
 
@@ -3946,7 +4022,7 @@ function wsi_render_email_log_page() {
         // deduct from main balance
         wsi_inc_main($uid, -$amount);
 
-        // calculate shares (amount ÷ price)
+        // calculate shares (amount Ã· price)
         $shares = $stock->price > 0 ? ($amount / floatval($stock->price)) : 0;
 
         $wpdb->insert($table_holdings, [
@@ -4138,7 +4214,7 @@ function wsi_apply_referral($user_id, $amount, $deposit_id = 0) {
             }
         }
 
-        // HOLDINGS ACCRUAL (unchanged — NOT controlled by Smart Farming)
+        // HOLDINGS ACCRUAL (unchanged - NOT controlled by Smart Farming)
         $t_hold = $wpdb->prefix . 'wsi_holdings';
         $t_stocks = $wpdb->prefix . 'wsi_stocks';
 
@@ -4499,11 +4575,11 @@ function wsi_apply_referral($user_id, $amount, $deposit_id = 0) {
                         modal.className = "wsi-modal-overlay";
                         modal.innerHTML = `
                             <div class="wsi-modal-box">
-                                <h3>✅ Your deposit has been submitted and is pending approval by admin.</h3>
+                                <h3>… Your deposit has been submitted and is pending approval by admin.</h3>
                                 <p>
                                     <strong>Deposit ID:</strong> #${dep.id}<br>
                                     <strong>Amount (USD):</strong> $${dep.usd}<br>
-                                    <strong>Amount (Local):</strong> ₦${dep.ngn}<br>
+                                    <strong>Amount (Local):</strong> â‚¦${dep.ngn}<br>
                                     <strong>Payment Type:</strong> ${dep.payment_type}<br>
                                     ${dep.wallet ? `<strong>Wallet:</strong> ${dep.wallet}<br>` : ""}
                                 </p>
@@ -4634,19 +4710,27 @@ function wsi_apply_referral($user_id, $amount, $deposit_id = 0) {
 
         $t_dep = $wpdb->prefix . 'wsi_deposits';
         $deposits = $wpdb->get_results(
-            $wpdb->prepare("SELECT amount, created_at FROM $t_dep WHERE user_id=%d AND status='approved'", $uid)
+            $wpdb->prepare("SELECT amount, created_at, approved_at FROM $t_dep WHERE user_id=%d AND status='approved'", $uid)
         );
 
         $now = current_time('timestamp');
-        $unlock_seconds = 60 * 24 * 60 * 60; // 60 days
+        $unlock_days = wsi_get_deposit_unlock_days();
+        $unlock_seconds = $unlock_days * 24 * 60 * 60;
+        $approved_total = 0;
         $unlocked_assets = 0;
         foreach ($deposits as $d) {
-            if (($now - strtotime($d->created_at)) >= $unlock_seconds) {
-                $unlocked_assets += floatval($d->amount);
+            $amount_dep = floatval($d->amount);
+            $approved_total += $amount_dep;
+            $unlock_date = $d->approved_at ?: $d->created_at;
+            if (($now - strtotime($unlock_date)) >= $unlock_seconds) {
+                $unlocked_assets += $amount_dep;
             }
         }
 
-        $available = $profit + $unlocked_assets;
+        // Available balance = profit + unlocked portion of main balance (locked deposits remain locked)
+        $locked_assets = max(0, $approved_total - $unlocked_assets);
+        $unlocked_available = max(0, $assets - $locked_assets);
+        $available = $profit + $unlocked_available;
         $net = $assets + $profit;
 
         return [
@@ -4777,7 +4861,17 @@ function wsi_apply_referral($user_id, $amount, $deposit_id = 0) {
                 $uid = intval($request->get_param('wsi_user_id'));
                 $t = $wpdb->prefix . 'wsi_transactions';
                 $rows = $wpdb->get_results(
-                    $wpdb->prepare("SELECT id, amount, type, description, created_at FROM {$t} WHERE user_id=%d ORDER BY created_at DESC LIMIT 100", $uid)
+                    $wpdb->prepare(
+                        "SELECT id, amount, type, description, created_at
+                         FROM {$t}
+                         WHERE user_id=%d
+                           AND NOT (type LIKE %s AND type LIKE %s)
+                         ORDER BY created_at DESC
+                         LIMIT 100",
+                        $uid,
+                        '%deposit%',
+                        '%pending%'
+                    )
                 );
 
                 $map_status = function ($type) {
@@ -4999,3 +5093,4 @@ function wsi_apply_referral($user_id, $amount, $deposit_id = 0) {
             }
         }
     });
+

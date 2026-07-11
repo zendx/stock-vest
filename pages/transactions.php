@@ -114,6 +114,10 @@ if (file_exists($wsi_asset_path)) {
                                 $where .= " AND type=%s";
                                 $params[] = $filter_type;
                             }
+                            // Hide pending deposits across the list
+                            $where .= " AND NOT (type LIKE %s AND type LIKE %s)";
+                            $params[] = '%deposit%';
+                            $params[] = '%pending%';
 
                             /* count */
                             $count_sql = "SELECT COUNT(*) FROM {$wpdb->prefix}wsi_transactions $where";
@@ -270,12 +274,37 @@ if (file_exists($wsi_asset_path)) {
                                             <?php if ($txs): ?>
                                                 <div class="wsi-tx-list">
                                                     <?php foreach ($txs as $t):
-                                                        $badge = 'success';
-                                                        if ($t->type === 'withdraw_request') $badge = 'warning';
-                                                        if ($t->type === 'smart_farm_interest') $badge = 'info';
-                                                        if ($t->type === 'reinvest') $badge = 'primary';
+                                                        $type = strtolower((string) $t->type);
 
-                                                        $amount_class = ($t->amount >= 0) ? 'wsi-amount-up' : 'wsi-amount-down';
+                                                        // Badge color rules:
+                                                        // - approved -> green
+                                                        // - deposit declined -> gray
+                                                        // - pending -> blue
+                                                        // - debit/withdrawal/buy stock -> red
+                                                        $badge = 'success';
+                                                        if (strpos($type, 'declined') !== false || strpos($type, 'refund') !== false) {
+                                                            $badge = 'secondary';
+                                                        } elseif (strpos($type, 'approved') !== false) {
+                                                            $badge = 'success';
+                                                        } elseif (strpos($type, 'pending') !== false) {
+                                                            $badge = 'primary';
+                                                        } elseif (strpos($type, 'withdraw') !== false || strpos($type, 'debit') !== false || strpos($type, 'buy_stock') !== false) {
+                                                            $badge = 'danger';
+                                                        }
+
+                                                        // Amount color should follow status/type rules as well
+                                                        $amount_class = '';
+                                                        if (strpos($type, 'declined') !== false || strpos($type, 'refund') !== false) {
+                                                            $amount_class = 'text-secondary';
+                                                        } elseif (strpos($type, 'approved') !== false) {
+                                                            $amount_class = 'wsi-amount-up';
+                                                        } elseif (strpos($type, 'pending') !== false) {
+                                                            $amount_class = 'text-primary';
+                                                        } elseif (strpos($type, 'withdraw') !== false || strpos($type, 'debit') !== false || strpos($type, 'buy_stock') !== false) {
+                                                            $amount_class = 'wsi-amount-down';
+                                                        } else {
+                                                            $amount_class = ($t->amount >= 0) ? 'wsi-amount-up' : 'wsi-amount-down';
+                                                        }
                                                         $desc = trim($t->description) !== '' ? $t->description : 'No description';
                                                     ?>
                                                     <details class="wsi-tx-card">

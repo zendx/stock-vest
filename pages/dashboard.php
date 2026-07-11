@@ -24,7 +24,7 @@ if (file_exists($wsi_asset_path)) {
 
 // --- USE THE CORRECT FUNCTIONS ---
 
-// Total assets
+// Total assets (raw float)
 $assets = wsi_get_main($user_id);
 
 // Profit income
@@ -38,21 +38,28 @@ global $wpdb;
 $t_dep = $wpdb->prefix . 'wsi_deposits';
 
 $deposits = $wpdb->get_results(
-    $wpdb->prepare("SELECT amount, created_at FROM $t_dep WHERE user_id=%d AND status='approved'", $user_id)
+    $wpdb->prepare("SELECT amount, created_at, approved_at FROM $t_dep WHERE user_id=%d AND status='approved'", $user_id)
 );
 
 $now = current_time('timestamp');
-$unlock_seconds = 60 * 24 * 60 * 60; // 60 days
+$unlock_days = function_exists('wsi_get_deposit_unlock_days') ? wsi_get_deposit_unlock_days() : 60;
+$unlock_seconds = $unlock_days * 24 * 60 * 60;
 
+$approved_total = 0;
 $unlocked_assets = 0;
 foreach ($deposits as $d) {
-    if (($now - strtotime($d->created_at)) >= $unlock_seconds) {
-        $unlocked_assets += floatval($d->amount);
+    $amount = floatval($d->amount);
+    $approved_total += $amount;
+    $unlock_date = $d->approved_at ?: $d->created_at;
+    if (($now - strtotime($unlock_date)) >= $unlock_seconds) {
+        $unlocked_assets += $amount;
     }
 }
 
-// Available balance = profit + unlocked deposits
-$available_balance = $profit_income + $unlocked_assets;
+// Available balance = profit + unlocked portion of main balance (locked deposits remain locked)
+$locked_assets = max(0, $approved_total - $unlocked_assets);
+$unlocked_available = max(0, $assets - $locked_assets);
+$available_balance = $profit_income + $unlocked_available;
 
 // Format for display
 $assets = number_format($assets, 2);

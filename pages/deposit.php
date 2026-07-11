@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 if (!defined('ABSPATH')) exit;
 
@@ -235,7 +235,16 @@ $default_naira = number_format($min_invest * max(1, $exchange_rate), 2, '.', '')
                                                             const url = new URL(window.location.href);
 
                                                             if (url.searchParams.get("deposit") === "success") {
-                                                                alert("Your deposit was submitted successfully and is pending approval.");
+                                                                if (window.Swal) {
+                                                                    Swal.fire({
+                                                                        icon: "success",
+                                                                        title: "Deposit Submitted",
+                                                                        text: "Your deposit was submitted successfully and is pending approval.",
+                                                                        confirmButtonText: "OK"
+                                                                    });
+                                                                } else {
+                                                                    alert("Your deposit was submitted successfully and is pending approval.");
+                                                                }
 
                                                                 // remove ?deposit=success from URL
                                                                 url.searchParams.delete("deposit");
@@ -443,12 +452,7 @@ $default_naira = number_format($min_invest * max(1, $exchange_rate), 2, '.', '')
                                     recalcNaira();
 
 
-                                    // ========================================================
-                                    // ðŸ”¥ FIX: REAL FORM SUBMIT HANDLER
-                                    // ========================================================
-                                    submitBtn.addEventListener("click", function() {
-                                        document.getElementById("wsi-deposit-form").submit();
-                                    }); // FIXED
+                                    // Keep submit handling in the later unified block below.
                                 }
 
                                 document.addEventListener("DOMContentLoaded", initDeposit);
@@ -472,7 +476,6 @@ $default_naira = number_format($min_invest * max(1, $exchange_rate), 2, '.', '')
 
             <script>
             (function(){
-                // Options passed from PHP to JS safe JSON
                 var WSI_OPTS = <?php echo json_encode([
                     'exchange_rate' => $exchange_rate,
                     'min_invest' => $min_invest,
@@ -489,8 +492,27 @@ $default_naira = number_format($min_invest * max(1, $exchange_rate), 2, '.', '')
                 function qs(id){ return document.getElementById(id); }
 
                 function formatNumber(n){
-                    // keep 2 decimals
                     return Number(n).toFixed(2);
+                }
+
+                function showDepositFeedback(message, type, redirectUrl){
+                    if (window.Swal && typeof window.Swal.fire === 'function') {
+                        Swal.fire({
+                            icon: type,
+                            title: type === 'success' ? 'Deposit Submitted' : 'Deposit Failed',
+                            text: message,
+                            confirmButtonText: 'OK'
+                        }).then(function(){
+                            if (redirectUrl) {
+                                window.location.href = redirectUrl;
+                            }
+                        });
+                    } else {
+                        alert(message);
+                        if (redirectUrl) {
+                            window.location.href = redirectUrl;
+                        }
+                    }
                 }
 
                 function init(){
@@ -501,6 +523,7 @@ $default_naira = number_format($min_invest * max(1, $exchange_rate), 2, '.', '')
                     var usd_display = qs('amount_usd_display');
                     var usd_hidden = qs('amount_usd');
                     var submitBtn = qs('wsi_deposit_submit');
+                    var form = qs('wsi-deposit-form');
 
                     var cryptoAmount = qs('crypto_amount');
                     var cryptoSelectWrap = qs('crypto_wallet_select');
@@ -512,13 +535,15 @@ $default_naira = number_format($min_invest * max(1, $exchange_rate), 2, '.', '')
                     var nairaSection = qs('naira_section');
                     var cryptoSection = qs('crypto_section');
 
+                    if (!form || !submitBtn || !naira) {
+                        return;
+                    }
+
                     function recalcNaira(){
                         var n = parseFloat(naira.value) || 0;
-                        // avoid divide by zero
                         var usd = rate > 0 ? (n / rate) : 0;
                         usd_display.value = formatNumber(usd);
                         usd_hidden.value = formatNumber(usd);
-                        // show submit if meets min
                         submitBtn.style.display = (usd >= minUSD) ? '' : 'none';
                     }
 
@@ -526,7 +551,6 @@ $default_naira = number_format($min_invest * max(1, $exchange_rate), 2, '.', '')
                         var c = parseFloat(cryptoAmount.value) || 0;
                         if (c >= minUSD) {
                             cryptoSelectWrap.style.display = '';
-                            // hide wallet info until selection
                             walletInfo.classList.add('wsi-hidden');
                             submitBtn.style.display = 'none';
                         } else {
@@ -570,7 +594,6 @@ $default_naira = number_format($min_invest * max(1, $exchange_rate), 2, '.', '')
                         submitBtn.style.display = '';
                     }
 
-                    // Payment radio switch
                     document.querySelectorAll('input[name="payment_type"]').forEach(function(radio){
                         radio.addEventListener('change', function(){
                             if (this.value === 'naira') {
@@ -585,239 +608,97 @@ $default_naira = number_format($min_invest * max(1, $exchange_rate), 2, '.', '')
                         });
                     });
 
-                    // Event bindings
                     naira.addEventListener('input', recalcNaira);
                     if (cryptoAmount) cryptoAmount.addEventListener('input', checkCrypto);
                     if (cryptoSelect) cryptoSelect.addEventListener('change', function(){ showWallet(this.value); });
 
-                    // initial state
                     recalcNaira();
 
-                    // Show crypto wallet select initially if admin provided any wallet AND user enters >= min
-                    // Also ensure crypto wallet select options exist (we printed only those with values)
-
-                    // Submit handler: prefer AJAX; fallback to default behavior if server doesn't return JSON
-                    submitBtn.addEventListener('click', function(){
-                        doSubmit();
-                    });
-
                     function doSubmit(){
-                        var form = qs('wsi-deposit-form');
                         var formData = new FormData(form);
 
-                        // Small client-side validation (USD minimum)
                         var paymentType = document.querySelector('input[name="payment_type"]:checked').value;
-                        var usdVal = 0;
-                        if (paymentType === 'naira') {
-                            usdVal = parseFloat(qs('amount_usd').value) || 0;
-                        } else {
-                            usdVal = parseFloat(qs('crypto_amount').value) || 0;
-                        }
+                        var usdVal = paymentType === 'naira'
+                            ? parseFloat(usd_hidden.value || 0)
+                            : parseFloat(cryptoAmount.value || 0);
+
                         if (usdVal < minUSD) {
-                            Swal.fire('Amount too small', 'The amount must be at least $' + minUSD.toFixed(2), 'error');
+                            showDepositFeedback('The minimum deposit amount is $' + minUSD.toFixed(2) + '.', 'error');
                             return;
                         }
 
-                        // Disable while submitting
-                        submitBtn.disabled = true;
-                        submitBtn.innerText = 'Processing...';
+                        formData.append('action', 'wsi_submit_deposit');
+                        formData.append('is_ajax', '1');
+                        formData.append('_wpnonce', form.querySelector('input[name="_wpnonce"]').value);
 
-                        fetch(form.action, {
+                        if (window.Swal && typeof window.Swal.fire === 'function') {
+                            Swal.fire({
+                                title: 'Submitting...',
+                                text: 'Please wait while we process your deposit.',
+                                allowOutsideClick: false,
+                                didOpen: function() {
+                                    Swal.showLoading();
+                                }
+                            });
+                        }
+
+                        submitBtn.disabled = true;
+                        submitBtn.textContent = 'Processing...';
+
+                        fetch('<?php echo esc_url(admin_url('admin-ajax.php')); ?>', {
                             method: 'POST',
                             credentials: 'same-origin',
                             body: formData
-                        }).then(function(res){
-                            // Attempt to parse JSON first
+                        })
+                        .then(function(res){
                             return res.text().then(function(text){
-                                // Try parse JSON; if fails, treat as non-JSON fallback
                                 try {
-                                    var data = JSON.parse(text);
-                                    return { parsed: true, data: data };
+                                    return { ok: true, data: JSON.parse(text) };
                                 } catch (e) {
-                                    return { parsed: false, text: text, status: res.status };
+                                    return { ok: false, text: text };
                                 }
                             });
-                        }).then(function(result){
-                            submitBtn.disabled = false;
-                            submitBtn.innerText = 'Submit Deposit';
-
-                            if (result.parsed) {
-                                var data = result.data;
-                                if (data && data.success) {
-
-                                    let d = data.data || {};
-
-                                    Swal.fire({
-                                        title: "Deposit Submitted",
-                                        html: `
-                                            Your deposit has been submitted and is pending approval.<br><br>
-                                            <strong>Deposit ID:</strong> ${d.deposit_id}<br>
-                                            <strong>Amount (USD):</strong> $${d.amount_usd}<br>
-                                            <strong>Amount (Local):</strong> ${d.amount_local}<br>
-                                            <strong>Payment Type:</strong> ${d.payment_type}
-                                        `,
-                                        icon: "success",
-                                        confirmButtonText: "OK"
-                                    }).then(function () {
-                                        if (d.redirect_to) {
-                                            window.location.href = d.redirect_to;
-                                        } else {
-                                            window.location.reload();
-                                        }
-                                    });
-
-                                } else {
-                                    // server returned json but indicates failure
-                                    var msg = (data && (data.data && data.data.message)) || data.message || 'An error occurred';
-                                    Swal.fire('Error', msg, 'error');
-                                }
-                            } else {
-                                // Non-JSON response: fallback to navigate to response (servers that redirect to page)
-                                // open result.text in new document
-                                var doc = window.open('', '_self');
-                                doc.document.write(result.text);
-                                doc.document.close();
+                        })
+                        .then(function(result){
+                            if (window.Swal && typeof window.Swal.close === 'function') {
+                                Swal.close();
                             }
-                        }).catch(function(err){
+
                             submitBtn.disabled = false;
-                            submitBtn.innerText = 'Submit Deposit';
-                            Swal.fire('Network error', 'Unable to submit deposit. Please try again.', 'error');
-                            console.error(err);
+                            submitBtn.textContent = 'Submit Deposit';
+
+                            if (result.ok && result.data && result.data.success) {
+                                var payload = result.data.data || {};
+                                var redirectUrl = payload.redirect || payload.redirect_to || '<?php echo esc_url(site_url('/wsi/deposit/')); ?>';
+                                showDepositFeedback(payload.message || 'Your deposit was submitted successfully.', 'success', redirectUrl);
+                            } else {
+                                var err = (result.data && result.data.data && result.data.data.message) || 'Unable to submit deposit at this time.';
+                                showDepositFeedback(err, 'error');
+                            }
+                        })
+                        .catch(function(){
+                            if (window.Swal && typeof window.Swal.close === 'function') {
+                                Swal.close();
+                            }
+                            submitBtn.disabled = false;
+                            submitBtn.textContent = 'Submit Deposit';
+                            showDepositFeedback('Unable to submit deposit. Please try again.', 'error');
                         });
                     }
-                } // end init
 
-                // DOM ready
-                if (document.readyState === 'loading') {
-                    document.addEventListener('DOMContentLoaded', init);
-                } else {
-                    init();
-                }
-            })();
-            </script>
-            <script>
-            document.getElementById('deposit-form').addEventListener('submit', function(e) {
-                e.preventDefault();
-
-                const form = this;
-                const formData = new FormData(form);
-                formData.append('is_ajax', '1');
-
-                fetch(form.action, {
-                    method: "POST",
-                    body: formData
-                })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.success) {
-                        Swal.fire({
-                            icon: "success",
-                            title: "Deposit Submitted!",
-                            text: data.data.message,
-                            confirmButtonText: "OK"
-                        }).then(() => {
-                            window.location.href = data.data.redirect_to;
-                        });
-                    } else {
-                        Swal.fire({
-                            icon: "error",
-                            title: "Deposit Failed",
-                            text: data.data.message || "An error occurred."
-                        });
-                    }
-                })
-                .catch(err => {
-                    Swal.fire({
-                        icon: "error",
-                        title: "Connection Error",
-                        text: "Unable to submit deposit."
-                    });
-                });
-            });
-            </script>
-            <!--Deposit Modal-->
-            <!--div id="deposit-toast" style="
-                display:none;
-                position:fixed;
-                top:20px;
-                right:20px;
-                background:#4CAF50;
-                color:#fff;
-                padding:12px 20px;
-                border-radius:6px;
-                box-shadow:0 4px 12px rgba(0,0,0,0.2);
-                z-index:9999;
-                font-family:sans-serif;
-                font-size:14px;
-            ">
-                Deposit Successful
-            </div>
-            <script>
-                function showDepositToast() {
-                    const toast = document.getElementById('deposit-toast');
-                    toast.style.display = 'block';
-                    
-                    setTimeout(() => {
-                        toast.style.display = 'none';
-                    }, 3000); // hide after 3 seconds
-                }
-
-                document.getElementById('wsi_deposit_submit').addEventListener('click', function() {
-                    // Submit the form normally
-                    document.getElementById('wsi-deposit-form').submit();
-
-                    // Show the simple success popup
-                    showDepositToast();
-                });
-
-
-            </script-->
-
-            <script>
-                document.addEventListener('DOMContentLoaded', function() {
-                    const form = document.getElementById('wsi-deposit-form');
-                    if (!form) return;
-                    
-                    form.addEventListener('submit', function(e) {
+                    submitBtn.addEventListener('click', function(e){
                         e.preventDefault();
-                        
-                        const formData = new FormData(form);
-                        
-                        fetch('<?php echo esc_url(admin_url('admin-ajax.php')); ?>', {
-                            method: 'POST',
-                            body: formData
-                        })
-                        .then(response => {
-                            console.log('Response status:', response.status);
-                            return response.text().then(text => {
-                                console.log('Response text:', text);
-                                try {
-                                    return JSON.parse(text);
-                                } catch (e) {
-                                    console.error('JSON parse error:', e);
-                                    throw new Error('Invalid response format: ' + text.substring(0, 100));
-                                }
-                            });
-                        })
-                        .then(data => {
-                            console.log('Parsed data:', data);
-                            if (data.success) {
-                                alert('Deposit submitted successfully!');
-                                if (data.data && data.data.redirect) {
-                                    window.location.href = data.data.redirect;
-                                } else {
-                                    window.location.href = '<?php echo esc_url(site_url('/wsi/deposit/')); ?>';
-                                }
-                            } else {
-                                alert('Error: ' + (data.data && data.data.message ? data.data.message : 'Failed to submit deposit'));
-                            }
-                        })
-                        .catch(error => {
-                            console.error('Fetch error:', error);
-                            alert('Error submitting form: ' + error.message);
-                        });
+                        doSubmit();
                     });
-                });
+
+                    form.addEventListener('submit', function(e){
+                        e.preventDefault();
+                        doSubmit();
+                    });
+                }
+
+                document.addEventListener('DOMContentLoaded', init);
+            })();
             </script>
 
         </body>
