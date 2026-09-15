@@ -1,4 +1,4 @@
-﻿<?php
+<?php
     /**
      * Plugin Name: WSI - Single-file Investment Plugin
      * Description: A self-contained â€œinvestment platformâ€ WordPress plugin.
@@ -747,7 +747,7 @@ function wsi_trigger_transaction_email($user_id, $type, $amount) {
         $code = wsi_ensure_invite_code($uid);
 
         // Encode the referral code so spaces and other characters remain intact in the URL.
-        return add_query_arg('ref', $code, site_url('wsi/signup/'));
+        return add_query_arg('ref', rawurlencode($code), home_url('/wsi/signup/'));
     }
 
     function wsi_get_register_page() {
@@ -2049,7 +2049,8 @@ add_action('user_register', function($user_id) {
             elseif ($pass !== $pass2) $msg = '<div class="notice notice-error">Passwords do not match.</div>';
             elseif (email_exists($email)) $msg = '<div class="notice notice-error">Email already registered.</div>';
             else {
-                $username = sanitize_user(current(explode('@', $email)));
+                $username = sanitize_user(explode('@', $email)[0]);
+                if (wsi_username_has_whitespace($username)) return '<div class="notice notice-error">Username must not contain spaces.</div>';
                 $base = $username;
                 $i = 1;
                 while (username_exists($username)) $username = $base . ($i++);
@@ -4292,13 +4293,28 @@ function wsi_apply_referral($user_id, $amount, $deposit_id = 0) {
     }, 1, 3);
 
 
+    /** Check the submitted value before sanitization can remove whitespace. */
+    function wsi_username_has_whitespace($username) {
+        return !is_string($username) || preg_match('/[\\s\\p{Z}\\x{200B}\\x{FEFF}]/u', $username) !== 0;
+    }
+
     // Handle registration from front-end form
     add_action('init', function() {
         if (isset($_POST['wsi_register_nonce']) && wp_verify_nonce($_POST['wsi_register_nonce'], 'wsi_register_action')) {
-            $username    = sanitize_user($_POST['username'] ?? '');
+            $raw_username = isset($_POST['username']) && is_string($_POST['username']) ? wp_unslash($_POST['username']) : '';
+            if (wsi_username_has_whitespace($raw_username)) {
+                set_transient('wsi_register_error', __('Username must not contain spaces. Use one word, dots, hyphens or underscores.', 'wsi'), 30);
+                $signup_url = home_url('/wsi/signup/');
+                if (isset($_POST['ref']) && is_string($_POST['ref'])) {
+                    $signup_url = add_query_arg('ref', rawurlencode(wp_unslash($_POST['ref'])), $signup_url);
+                }
+                wp_safe_redirect($signup_url);
+                exit;
+            }
+            $username    = sanitize_user($raw_username);
             $email       = sanitize_email($_POST['email'] ?? '');
             $password    = sanitize_text_field($_POST['password'] ?? '');
-            $ref         = sanitize_text_field($_POST['ref'] ?? '');
+            $ref         = sanitize_text_field(wp_unslash($_POST['ref'] ?? ''));
             $first_name  = sanitize_text_field($_POST['first_name'] ?? '');
             $last_name   = sanitize_text_field($_POST['last_name'] ?? '');
             $phone_code  = sanitize_text_field($_POST['phone_code'] ?? '');
@@ -4904,14 +4920,17 @@ function wsi_apply_referral($user_id, $amount, $deposit_id = 0) {
             },
         ]);
     });
-    /* Add Routes ------------------------/
-    -------------------------------------*/
+    // Register routes before refreshing stored rewrite rules after an update.
     add_action('init', function () {
-        add_rewrite_rule(
-            '^wsi/([^/]*)/?',
-            'index.php?sv_page=$matches[1]',
-            'top'
-        );
+        add_rewrite_rule('^wsi/?$', 'index.php?sv_page=home', 'top');
+        add_rewrite_rule('^wsi/([a-z-]+)/?$', 'index.php?sv_page=$matches[1]', 'top');
+    });
+
+    add_action('wp_loaded', function () {
+        if (get_option('wsi_routes_version') !== '2') {
+            flush_rewrite_rules(false);
+            update_option('wsi_routes_version', '2');
+        }
     });
 
     add_filter('query_vars', function ($vars) {
@@ -4919,41 +4938,46 @@ function wsi_apply_referral($user_id, $amount, $deposit_id = 0) {
         return $vars;
     });
 
-    add_action('template_redirect', function () {
-        $page = get_query_var('sv_page');
-
-        if ($page) {
-            // AUTHENTICATION CHECKS before loading page
-            
-            // Public pages that don't require login
-            $public_pages = ['login', 'forgot-password', 'signup', 'gen-pass'];
-            $is_public = in_array($page, $public_pages);
-
-            // Block non-admin from wp-admin
-            if (is_admin() && !defined('DOING_AJAX')) {
-                if (!wsi_admin_can()) {
-                    wp_safe_redirect(home_url('/wsi/login/'));
-                    exit;
-                }
-            }
-
-            // Redirect logged-out users from private pages to login
-            if (!$is_public && !is_user_logged_in()) {
-                wp_safe_redirect(home_url('/wsi/login/'));
-                exit;
-            }
-
-            // Redirect logged-in users from login page to dashboard
-            if ($page === 'login' && is_user_logged_in()) {
-                wp_safe_redirect(home_url('/wsi/dashboard/'));
-                exit;
-            }
-
-            // Load the page file
-            $file = WP_PLUGIN_DIR . '/stock-vest/pages/' . $page . '.php';
-            if (file_exists($file)) {
-                require_once $file;
-                exit;
-            }
+    /** Resolve only plugin pages, relative to the WordPress public home path. */
+    function wsi_resolve_page($request_uri, $home_url, $query_page = '') {
+        $pages = ['home', 'login', 'forgot-password', 'signup', 'gen-pass',
+            'dashboard', 'deposit', 'withdrawal', 'holdings', 'stocks',
+            'reinvest', 'referral', 'transactions', 'user-settings'];
+        $path = parse_url($request_uri, PHP_URL_PATH);
+        $base = rtrim((string) parse_url($home_url, PHP_URL_PATH), '/');
+        if (is_string($path) && preg_match('#^' . preg_quote($base, '#') . '/wsi(?:/([a-z-]+))?/?$#D', $path, $match)) {
+            $page = $match[1] ?? 'home';
+            return in_array($page, $pages, true) ? $page : '';
         }
-    });
+        return is_string($query_page) && in_array($query_page, $pages, true) ? $query_page : '';
+    }
+
+    // Run before canonical redirects and older template handlers. The path fallback
+    // also supports installations whose stored rewrite rules have not refreshed yet.
+    add_action('template_redirect', function () {
+        $page = wsi_resolve_page($_SERVER['REQUEST_URI'] ?? '', home_url('/'), get_query_var('sv_page'));
+        if (!$page) return;
+
+        if ($page === 'home') {
+            wp_safe_redirect(home_url(is_user_logged_in() ? '/wsi/dashboard/' : '/wsi/login/'));
+            exit;
+        }
+        $public_pages = ['login', 'forgot-password', 'signup', 'gen-pass'];
+        if (!in_array($page, $public_pages, true) && !is_user_logged_in()) {
+            wp_safe_redirect(home_url('/wsi/login/'));
+            exit;
+        }
+        if ($page === 'login' && is_user_logged_in()) {
+            wp_safe_redirect(home_url('/wsi/dashboard/'));
+            exit;
+        }
+
+        $file = WSI_DIR . 'pages/' . $page . '.php';
+        if (is_readable($file)) {
+            status_header(200);
+            nocache_headers();
+            require $file;
+            exit;
+        }
+        wp_die('This plugin page is missing. Please upload the complete Stock Vest plugin folder.', 'Plugin page unavailable', ['response' => 503]);
+    }, 0);

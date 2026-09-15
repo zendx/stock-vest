@@ -135,7 +135,7 @@ $city       = get_user_meta($user_id, 'city', true);
                                             <div class="card-body">
                                                 <ul class="nav nav-pills adminuiux-nav-pills flex-column">
                                                     <li class="nav-item">
-                                                        <a class="nav-link active" aria-current="page" href="../user-settings">
+                                                        <a class="nav-link active" aria-current="page" href="<?php echo esc_url(home_url('/wsi/user-settings/')); ?>">
                                                             <div class="avatar avatar-28 icon"><i data-feather="user"></i></div>
                                                             <div class="col">
                                                                 <p class="h6 mb-0">My Profile</p>

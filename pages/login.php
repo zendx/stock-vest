@@ -109,7 +109,7 @@ if (is_user_logged_in()) {
                                                 </div>
                                             </div>
                                             <div class="col-auto">
-                                                <a href="../forgot-password">Forgot Password?</a>
+                                                <a href="<?php echo esc_url(home_url('/wsi/forgot-password/')); ?>">Forgot Password?</a>
                                             </div>
                                         </div>
 

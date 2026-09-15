@@ -4,7 +4,8 @@ if (!defined('ABSPATH')) exit;
 $wsi = plugins_url('assets/', __FILE__);
 
 
-$ref = $_GET['ref'] ?? ($_COOKIE['wsi_ref'] ?? '');
+$ref_value = $_GET['ref'] ?? ($_COOKIE['wsi_ref'] ?? '');
+$ref = is_string($ref_value) ? wp_unslash($ref_value) : '';
 
 if (empty($ref)) {
     wp_die("You need an invite link to access registration.");
@@ -134,8 +135,8 @@ if (file_exists($wsi_asset_path)) {
                                         </div>
 
                                         <div class="form-floating mb-3">
-                                            <input type="text" name="username" autocomplete="username" class="form-control" id="username" pattern="\S+" title="Username must not contain spaces." required placeholder=" ">
-                                            <label for="username">Username</label>
+                                            <input type="text" name="username" autocomplete="username" class="form-control" id="username" pattern="[^\s\p{Z}\u200B\uFEFF]+" title="Username must not contain spaces." required placeholder=" ">
+                                            <label for="username">Username (no spaces)</label>
                                         </div>
 
                                         <div class="form-floating mb-3">

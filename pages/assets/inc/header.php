@@ -73,7 +73,7 @@ $header_assets = $header_balances['total_assets'];
             </button>
 
             <!-- Logo -->
-            <a class="navbar-brand" href="../dashboard">
+            <a class="navbar-brand" href="<?php echo esc_url(home_url('/wsi/dashboard/')); ?>">
                 <img data-bs-img="light" src="<?php echo $wsi; ?>img/logo-main.png" alt="">
                 <img data-bs-img="dark" src="<?php echo $wsi; ?>img/logo-white.png" alt="">
             </a>
@@ -178,7 +178,7 @@ $header_assets = $header_balances['total_assets'];
                                 <i data-feather="dollar-sign" class="avatar avatar-18 me-1"></i> Earning
                             </a-->
 
-                            <a class="dropdown-item" href="../user-settings">
+                            <a class="dropdown-item" href="<?php echo esc_url(home_url('/wsi/user-settings/')); ?>">
                                 <i data-feather="settings" class="avatar avatar-18 me-1"></i> Account Settings
                             </a>
 
@@ -213,56 +213,56 @@ $header_assets = $header_balances['total_assets'];
             <ul class="nav flex-column menu-active-line">
 
                 <li class="nav-item">
-                    <a href="../dashboard" class="nav-link">
+                    <a href="<?php echo esc_url(home_url('/wsi/dashboard/')); ?>" class="nav-link">
                         <i class="menu-icon bi bi-columns-gap"></i>
                         <span class="menu-name">Dashboard</span>
                     </a>
                 </li>
 
                 <li class="nav-item">
-                    <a href="../deposit" class="nav-link">
+                    <a href="<?php echo esc_url(home_url('/wsi/deposit/')); ?>" class="nav-link">
                         <i class="menu-icon bi bi-wallet"></i>
                         <span class="menu-name">Deposit</span>
                     </a>
                 </li>
 
                 <li class="nav-item">
-                    <a href="../holdings" class="nav-link">
+                    <a href="<?php echo esc_url(home_url('/wsi/holdings/')); ?>" class="nav-link">
                         <i class="menu-icon bi bi-bullseye"></i>
                         <span class="menu-name">Stock Holdings</span>
                     </a>
                 </li>
 
                 <li class="nav-item">
-                    <a href="../withdrawal" class="nav-link">
+                    <a href="<?php echo esc_url(home_url('/wsi/withdrawal/')); ?>" class="nav-link">
                         <i class="menu-icon bi bi-bank"></i>
                         <span class="menu-name">Withdrawals</span>
                     </a>
                 </li>
 
                 <li class="nav-item">
-                    <a href="../reinvest" class="nav-link">
+                    <a href="<?php echo esc_url(home_url('/wsi/reinvest/')); ?>" class="nav-link">
                         <i class="menu-icon bi bi-recycle"></i>
                         <span class="menu-name">Reinvest</span>
                     </a>
                 </li>
 
                 <li class="nav-item">
-                    <a href="../stocks" class="nav-link">
+                    <a href="<?php echo esc_url(home_url('/wsi/stocks/')); ?>" class="nav-link">
                         <i data-feather="settings" class="menu-icon"></i>
                         <span class="menu-name">Stocks</span>
                     </a>
                 </li>
 
                 <li class="nav-item">
-                    <a href="../transactions" class="nav-link">
+                    <a href="<?php echo esc_url(home_url('/wsi/transactions/')); ?>" class="nav-link">
                         <i class="menu-icon bi bi-bar-chart-line"></i>
                         <span class="menu-name">Transactions</span>
                     </a>
                 </li>
 
                 <li class="nav-item">
-                    <a href="../referral" class="nav-link">
+                    <a href="<?php echo esc_url(home_url('/wsi/referral/')); ?>" class="nav-link">
                         <i data-feather="users" class="menu-icon"></i>
                         <span class="menu-name">Referral</span>
                     </a>

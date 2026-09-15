@@ -30,3 +30,24 @@ if ($bootstrap !== '' || $activation !== '') {
     exit(1);
 }
 echo "PASS: plugin bootstrap and activation emit zero bytes (WordPress services stubbed).\n";
+
+$routes = [
+    ['/wsi', 'https://example.test/', '', 'home'],
+    ['/wsi/', 'https://example.test/', '', 'home'],
+    ['/sv/wsi/', 'https://example.test/sv/', '', 'home'],
+    ['/sv/wsi/login/?next=1', 'https://example.test/sv/', '', 'login'],
+    ['/bevilon/wsi/dashboard/', 'https://example.test/bevilon/', '', 'dashboard'],
+    ['/sv/wsi/withdrawal/', 'https://example.test/sv/', '', 'withdrawal'],
+    ['/sv/?sv_page=deposit', 'https://example.test/sv/', 'deposit', 'deposit'],
+    ['/wsi/', 'https://example.test/sv/', '', ''],
+    ['/sv/wsi/unknown/', 'https://example.test/sv/', '', ''],
+    ['/sv/wsi/../../secret', 'https://example.test/sv/', '', ''],
+    ['/sv/', 'https://example.test/sv/', '../secret', ''],
+];
+foreach ($routes as [$uri, $home, $query, $expected]) {
+    if (wsi_resolve_page($uri, $home, $query) !== $expected) {
+        fwrite(STDERR, "FAIL: route $uri\n");
+        exit(1);
+    }
+}
+echo "PASS: 11 routing cases cover root, subfolders, query strings and invalid pages.\n";
