@@ -1,5 +1,9 @@
 import React, {useState} from 'react';
+<<<<<<< HEAD
 import {Alert, Pressable, StyleSheet, TextInput, View} from 'react-native';
+=======
+import {Alert, StyleSheet, TextInput, View} from 'react-native';
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
 import {useMutation} from '@tanstack/react-query';
 import {Ionicons} from '@expo/vector-icons';
 import {Screen} from '../components/Screen';
@@ -10,9 +14,12 @@ import {useTheme} from '../theme';
 import {useSession} from '../hooks/useSession';
 import {submitWithdrawal} from '../api/portfolio';
 import {queryClient} from '../lib/queryClient';
+<<<<<<< HEAD
 import {showFinancialFlowError} from '../lib/financialFlow';
 import {useBalances} from '../hooks/useBalances';
 import type {WithdrawalRequest, WithdrawalSource} from '../types';
+=======
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
 
 const WithdrawScreen = () => {
   const theme = useTheme();
@@ -20,17 +27,24 @@ const WithdrawScreen = () => {
   const [amount, setAmount] = useState('');
   const [destination, setDestination] = useState('');
   const [note, setNote] = useState('');
+<<<<<<< HEAD
   const [source, setSource] = useState<WithdrawalSource>('available_balance');
   const {data: balances, error: balanceError} = useBalances();
   const assetsLocked = balances?.totalAssetsLocked !== false;
 
   const mutation = useMutation({
     mutationFn: (payload: WithdrawalRequest) => submitWithdrawal(payload, token),
+=======
+
+  const mutation = useMutation({
+    mutationFn: (payload: {amount: string; destination: string; note?: string}) => submitWithdrawal(payload, token),
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ['balances']});
       queryClient.invalidateQueries({queryKey: ['transactions']});
       Alert.alert('Withdrawal submitted', 'Your withdrawal request is captured in-app. Track status from Activity.');
     },
+<<<<<<< HEAD
     onError: (err: unknown, payload) => showFinancialFlowError(err, 'Withdrawal', `/wsi/withdrawal/?withdrawal_source=${payload.withdrawal_source}`),
   });
 
@@ -52,6 +66,20 @@ const WithdrawScreen = () => {
     mutation.mutate({
       amount: value.toFixed(2),
       withdrawal_source: source,
+=======
+    onError: (err: any) => {
+      Alert.alert('Withdrawal failed', err?.message || 'Unable to submit withdrawal right now.');
+    },
+  });
+
+  const handleSubmit = () => {
+    if (!amount || !destination) {
+      Alert.alert('Add details', 'Include amount and destination to continue.');
+      return;
+    }
+    mutation.mutate({
+      amount: amount.trim(),
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
       destination: destination.trim(),
       note: note.trim() || undefined,
     });
@@ -69,7 +97,11 @@ const WithdrawScreen = () => {
           Withdraw
         </Typography>
         <Typography variant="caption" style={{color: '#E7F6ED', marginTop: 6}}>
+<<<<<<< HEAD
           Withdraw from Available Balance or unlocked Total Assets.
+=======
+          Request withdrawals inside the app with the same rules as the WordPress flow.
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
         </Typography>
       </View>
 
@@ -78,6 +110,7 @@ const WithdrawScreen = () => {
           Withdraw Funds
         </Typography>
         <Typography variant="caption" style={{color: theme.palette.muted, marginTop: 6}}>
+<<<<<<< HEAD
           Enter the amount and destination details for this request.
         </Typography>
 
@@ -109,6 +142,12 @@ const WithdrawScreen = () => {
               ? (balances?.totalAssetsUnlockAt ? `Total Assets unlock on ${new Date(balances.totalAssetsUnlockAt).toLocaleString()}.` : 'Total Assets withdrawals are locked until the investment period ends.')
               : 'Total Assets are unlocked for withdrawal.'}
           </Typography>
+=======
+          Keep withdrawal processing in the app. Connect this action to your REST endpoint.
+        </Typography>
+
+        <View style={{gap: 12, marginTop: 14}}>
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
           <TextInput
             placeholder="Amount (USD)"
             placeholderTextColor={theme.palette.muted}
@@ -139,7 +178,11 @@ const WithdrawScreen = () => {
           fullWidth
           style={{marginTop: 16}}
           onPress={mutation.isPending ? undefined : handleSubmit}
+<<<<<<< HEAD
           disabled={!amount || !destination || mutation.isPending || !balances || !!balanceError || (source === 'total_assets' && assetsLocked)}
+=======
+          disabled={!amount || !destination || mutation.isPending}
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
         />
         {mutation.isPending ? (
           <Typography variant="caption" style={{color: theme.palette.muted, marginTop: 8}}>
@@ -156,7 +199,11 @@ const WithdrawScreen = () => {
           <View style={{flex: 1}}>
             <Typography weight="medium">Payout methods</Typography>
             <Typography variant="caption" style={{color: theme.palette.muted, marginTop: 4}}>
+<<<<<<< HEAD
               Available payout methods and processing rules are confirmed before submission.
+=======
+              Crypto or bank per plugin settings. Adjust defaults via env if needed.
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
             </Typography>
           </View>
         </View>

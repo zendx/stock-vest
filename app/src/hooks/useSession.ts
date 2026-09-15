@@ -1,9 +1,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
+<<<<<<< HEAD
+=======
+import create from 'zustand';
+import {persist, createJSONStorage} from 'zustand/middleware';
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
 import {login as apiLogin, signup as apiSignup, fetchProfile} from '../api/auth';
 import {User} from '../types';
 import {queryClient} from '../lib/queryClient';
 
+<<<<<<< HEAD
 // Metro's web resolver selects Zustand's ESM build, which contains import.meta
 // syntax that cannot run in Expo's classic script bundle. Requiring the package
 // selects its equivalent CommonJS build on web and remains compatible natively.
@@ -12,6 +18,8 @@ const {create} = require('zustand') as typeof import('zustand');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const {persist, createJSONStorage} = require('zustand/middleware') as typeof import('zustand/middleware');
 
+=======
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
 type SessionState = {
   status: 'idle' | 'loading' | 'hydrating' | 'error';
   isAuthenticated: boolean;
@@ -26,7 +34,10 @@ type SessionState = {
 };
 
 const TOKEN_KEY = 'cofco-session-token';
+<<<<<<< HEAD
 let hydrationPromise: Promise<void> | null = null;
+=======
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
 
 const storeToken = async (token?: string) => {
   if (!token) {
@@ -36,12 +47,16 @@ const storeToken = async (token?: string) => {
   }
   try {
     await SecureStore.setItemAsync(TOKEN_KEY, token);
+<<<<<<< HEAD
     await AsyncStorage.removeItem(TOKEN_KEY).catch(() => {});
+=======
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
   } catch {
     await AsyncStorage.setItem(TOKEN_KEY, token);
   }
 };
 
+<<<<<<< HEAD
 const loadToken = async (): Promise<string | null> => {
   try {
     const secure = await SecureStore.getItemAsync(TOKEN_KEY);
@@ -55,6 +70,12 @@ const loadToken = async (): Promise<string | null> => {
   } catch {
     return null;
   }
+=======
+const loadToken = async () => {
+  const secure = await SecureStore.getItemAsync(TOKEN_KEY);
+  if (secure) return secure;
+  return AsyncStorage.getItem(TOKEN_KEY);
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
 };
 
 export const useSession = create<SessionState>()(
@@ -66,6 +87,7 @@ export const useSession = create<SessionState>()(
       token: undefined,
       user: undefined,
       error: undefined,
+<<<<<<< HEAD
       hydrate: () => {
         if (get().hydrated) return Promise.resolve();
         if (hydrationPromise) return hydrationPromise;
@@ -106,6 +128,23 @@ export const useSession = create<SessionState>()(
         })();
 
         return hydrationPromise;
+=======
+      hydrate: async () => {
+        if (get().hydrated) return;
+        set({status: 'hydrating'});
+        const token = await loadToken();
+        if (!token) {
+          set({hydrated: true, status: 'idle', isAuthenticated: false, token: undefined});
+          return;
+        }
+        try {
+          const profile = await fetchProfile(token);
+          set({hydrated: true, status: 'idle', isAuthenticated: true, token, user: profile, error: undefined});
+        } catch (err: any) {
+          set({hydrated: true, status: 'error', isAuthenticated: false, token: undefined, user: undefined, error: err?.message || 'Session expired'});
+          await storeToken(undefined);
+        }
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
       },
       login: async ({identifier, password, remember = true}) => {
         set({status: 'loading', error: undefined});

@@ -10,6 +10,9 @@ export const useBalances = () => {
     queryFn: () => fetchBalances(token),
     enabled: hydrated && isAuthenticated && !!token,
     placeholderData: (prev) => prev,
+<<<<<<< HEAD
     refetchInterval: 30000,
+=======
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
   });
 };

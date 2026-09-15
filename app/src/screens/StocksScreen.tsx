@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 import React, {useCallback, useMemo, useState} from 'react';
+=======
+import React, {useMemo, useState} from 'react';
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
 import {FlatList, View, StyleSheet, TextInput} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {Ionicons} from '@expo/vector-icons';
@@ -8,6 +12,7 @@ import {Surface} from '../components/Surface';
 import {PrimaryButton} from '../components/PrimaryButton';
 import {useTheme} from '../theme';
 import {useStocks} from '../hooks/useStocks';
+<<<<<<< HEAD
 import type {TabNavigationProp} from '../navigation/types';
 
 const StocksScreen = () => {
@@ -18,6 +23,14 @@ const StocksScreen = () => {
   const handleRefresh = useCallback(() => {
     void refetch();
   }, [refetch]);
+=======
+
+const StocksScreen = () => {
+  const theme = useTheme();
+  const {data: stocks = [], isLoading, error} = useStocks();
+  const [query, setQuery] = useState('');
+  const navigation = useNavigation();
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
 
   const filtered = useMemo(
     () =>
@@ -30,7 +43,11 @@ const StocksScreen = () => {
   );
 
   return (
+<<<<<<< HEAD
     <Screen scroll={false} bottomInset={false}>
+=======
+    <Screen scroll={false}>
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
       <View style={[styles.hero, {backgroundColor: theme.palette.primary}]}>
         <Typography variant="subtitle" weight="bold" style={{color: '#fff'}}>
           Stocks
@@ -59,12 +76,20 @@ const StocksScreen = () => {
         ListEmptyComponent={() =>
           !isLoading && (
             <Typography variant="body" style={{color: theme.palette.muted}}>
+<<<<<<< HEAD
               {error ? 'Stocks are temporarily unavailable.' : 'No stocks available.'}
             </Typography>
           )
         }
         refreshing={isFetching}
         onRefresh={handleRefresh}
+=======
+              {error ? 'Unable to load stocks. Check API configuration.' : 'No stocks available.'}
+            </Typography>
+          )
+        }
+        refreshing={isLoading}
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
         renderItem={({item}) => (
           <Surface style={styles.stockCard}>
             <View style={styles.stockRow}>
@@ -89,7 +114,11 @@ const StocksScreen = () => {
                 label="Buy"
                 style={{marginLeft: 10, minWidth: 72}}
                 compact
+<<<<<<< HEAD
                 onPress={() => navigation.navigate('BuyStock', {stock: item})}
+=======
+                onPress={() => navigation.navigate('BuyStock' as never, {stock: item} as never)}
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
               />
             </View>
           </Surface>

@@ -1,5 +1,9 @@
 import React, {useEffect, useMemo, useState} from 'react';
+<<<<<<< HEAD
 import {Alert, StyleSheet, TextInput, View, Switch} from 'react-native';
+=======
+import {Alert, ScrollView, StyleSheet, TextInput, View, Switch} from 'react-native';
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
 import {Ionicons} from '@expo/vector-icons';
 import {Screen} from '../components/Screen';
 import {Surface} from '../components/Surface';
@@ -92,13 +96,21 @@ const UserSettingsScreen = () => {
         </Typography>
       </View>
 
+<<<<<<< HEAD
       <View style={{paddingBottom: 20}}>
+=======
+      <ScrollView contentContainerStyle={{paddingBottom: 20}}>
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
         <Surface style={{padding: 14, marginBottom: 12}}>
           <Typography variant="subtitle" weight="medium">
             Profile Details
           </Typography>
           <Typography variant="caption" style={{color: theme.palette.muted, marginTop: 6}}>
+<<<<<<< HEAD
             Keep your contact and address information up to date.
+=======
+            Mirrors user-settings.php inside the app. Saved via the WordPress REST bridge.
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
           </Typography>
         </Surface>
 
@@ -175,14 +187,22 @@ const UserSettingsScreen = () => {
               <View>
                 <Typography weight="medium">Secure and synced</Typography>
                 <Typography variant="caption" style={{color: theme.palette.muted}}>
+<<<<<<< HEAD
                   Changes are saved securely to your COFCO Capital account.
+=======
+                  Updates persist via REST, matching the WordPress profile form.
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
                 </Typography>
               </View>
             </View>
             <Ionicons name="chevron-forward" size={18} color={theme.palette.muted} />
           </View>
         </Surface>
+<<<<<<< HEAD
       </View>
+=======
+      </ScrollView>
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
     </Screen>
   );
 };

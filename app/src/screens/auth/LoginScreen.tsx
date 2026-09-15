@@ -6,11 +6,18 @@ import {Typography} from '../../components/Typography';
 import {PrimaryButton} from '../../components/PrimaryButton';
 import {useTheme} from '../../theme';
 import {useSession} from '../../hooks/useSession';
+<<<<<<< HEAD
 import type {AuthNavigationProp} from '../../navigation/types';
 
 const LoginScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation<AuthNavigationProp<'Login'>>();
+=======
+
+const LoginScreen = () => {
+  const theme = useTheme();
+  const navigation = useNavigation();
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
   const {login, status, error} = useSession();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -68,19 +75,31 @@ const LoginScreen = () => {
       </View>
 
       <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12}}>
+<<<<<<< HEAD
         <View style={{flexDirection: 'row', alignItems: 'center', gap: 8}}>
           <Switch
             value={remember}
             onValueChange={setRemember}
             accessibilityLabel="Remember me"
+=======
+        <Pressable onPress={() => setRemember(!remember)} style={{flexDirection: 'row', alignItems: 'center', gap: 8}}>
+          <Switch
+            value={remember}
+            onValueChange={setRemember}
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
             thumbColor={remember ? theme.palette.surface : '#ffffff'}
             trackColor={{true: theme.palette.primary, false: theme.palette.border}}
           />
           <Typography variant="caption" style={{color: theme.palette.text}}>
             Remember me
           </Typography>
+<<<<<<< HEAD
         </View>
         <Pressable onPress={() => navigation.navigate('ForgotPassword')}>
+=======
+        </Pressable>
+        <Pressable onPress={() => navigation.navigate('ForgotPassword' as never)}>
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
           <Typography variant="caption" style={{color: theme.palette.primary, fontWeight: '600'}}>
             Forgot Password?
           </Typography>
@@ -103,7 +122,11 @@ const LoginScreen = () => {
         <Typography variant="caption" style={{color: theme.palette.muted}}>
           Don&apos;t have an account?{' '}
         </Typography>
+<<<<<<< HEAD
         <Pressable onPress={() => navigation.navigate('Signup')}>
+=======
+        <Pressable onPress={() => navigation.navigate('Signup' as never)}>
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
           <Typography variant="caption" style={{color: theme.palette.primary, fontWeight: '700'}}>
             Sign Up
           </Typography>

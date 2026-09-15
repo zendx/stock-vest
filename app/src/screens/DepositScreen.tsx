@@ -10,7 +10,10 @@ import {useTheme} from '../theme';
 import {submitDeposit} from '../api/portfolio';
 import {useSession} from '../hooks/useSession';
 import {queryClient} from '../lib/queryClient';
+<<<<<<< HEAD
 import {showFinancialFlowError} from '../lib/financialFlow';
+=======
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
 
 const DepositScreen = () => {
   const theme = useTheme();
@@ -26,6 +29,7 @@ const DepositScreen = () => {
       queryClient.invalidateQueries({queryKey: ['transactions']});
       Alert.alert('Deposit submitted', 'Your deposit request is captured in-app. Track status from Activity.');
     },
+<<<<<<< HEAD
     onError: (err: unknown) => showFinancialFlowError(err, 'Deposit', '/wsi/deposit/'),
   });
 
@@ -33,6 +37,16 @@ const DepositScreen = () => {
     const value = Number(amount.replace(/,/g, ''));
     if (!Number.isFinite(value) || value <= 0) {
       Alert.alert('Enter a valid amount', 'Deposit amount must be greater than zero.');
+=======
+    onError: (err: any) => {
+      Alert.alert('Deposit failed', err?.message || 'Unable to submit deposit right now.');
+    },
+  });
+
+  const handleSubmit = () => {
+    if (!amount) {
+      Alert.alert('Enter an amount', 'Add a deposit amount to continue.');
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
       return;
     }
     mutation.mutate({amount: amount.trim(), method: method.trim() || 'Bank transfer', note: note.trim() || undefined});
@@ -50,7 +64,11 @@ const DepositScreen = () => {
           Deposit
         </Typography>
         <Typography variant="caption" style={{color: '#E7F6ED', marginTop: 6}}>
+<<<<<<< HEAD
           Add funds to your COFCO Capital account.
+=======
+          Add funds without leaving the app. Mirrors the WordPress deposit flow.
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
         </Typography>
       </View>
 
@@ -59,7 +77,11 @@ const DepositScreen = () => {
           New Deposit
         </Typography>
         <Typography variant="caption" style={{color: theme.palette.muted, marginTop: 6}}>
+<<<<<<< HEAD
           Choose an amount and funding method to continue.
+=======
+          Submit deposits without leaving the app. Wire this call to your API endpoint.
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
         </Typography>
 
         <View style={{gap: 12, marginTop: 14}}>
@@ -110,7 +132,11 @@ const DepositScreen = () => {
           <View style={{flex: 1}}>
             <Typography weight="medium">Supported methods</Typography>
             <Typography variant="caption" style={{color: theme.palette.muted, marginTop: 4}}>
+<<<<<<< HEAD
               Bank transfer and supported digital asset methods are shown on the secure deposit page.
+=======
+              Bank/manual deposits or crypto per your WordPress settings. Update API wiring as needed.
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
             </Typography>
           </View>
         </View>

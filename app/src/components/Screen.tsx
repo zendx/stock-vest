@@ -1,6 +1,11 @@
 import React, {ReactNode, useEffect} from 'react';
+<<<<<<< HEAD
 import {KeyboardAvoidingView, Platform, ScrollView, StatusBar, StyleSheet, View} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
+=======
+import {ScrollView, StatusBar, StyleSheet, View} from 'react-native';
+import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
 import {useTheme} from '../theme';
 import {useSession} from '../hooks/useSession';
 
@@ -21,6 +26,10 @@ export const Screen = ({
 }: ScreenProps) => {
   const theme = useTheme();
   const {isAuthenticated, hydrated, status, token, logout} = useSession();
+<<<<<<< HEAD
+=======
+  const insets = useSafeAreaInsets();
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
   const gating = requireAuth;
 
   useEffect(() => {
@@ -40,6 +49,10 @@ export const Screen = ({
         styles.container,
         {backgroundColor: theme.palette.background},
         padded && {paddingHorizontal: theme.spacing[5]},
+<<<<<<< HEAD
+=======
+        {paddingTop: Math.max(insets.top, 12)},
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
         bottomInset && {paddingBottom: theme.spacing[6]},
       ]}
     >
@@ -48,6 +61,7 @@ export const Screen = ({
   );
 
   return (
+<<<<<<< HEAD
     <SafeAreaView
       style={[styles.safeArea, {backgroundColor: theme.palette.background}]}
       edges={bottomInset ? ['top', 'left', 'right', 'bottom'] : ['top', 'left', 'right']}
@@ -73,17 +87,25 @@ export const Screen = ({
           content
         )}
       </KeyboardAvoidingView>
+=======
+    <SafeAreaView style={{flex: 1, backgroundColor: theme.palette.background}} edges={['top', 'left', 'right', 'bottom']}>
+      <StatusBar barStyle="dark-content" backgroundColor={theme.palette.background} translucent={false} />
+      {scroll ? <ScrollView showsVerticalScrollIndicator={false}>{content}</ScrollView> : content}
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+<<<<<<< HEAD
   safeArea: {
     flex: 1,
   },
   keyboardAvoidingView: {
     flex: 1,
   },
+=======
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
   container: {
     flexGrow: 1,
     paddingTop: 12,

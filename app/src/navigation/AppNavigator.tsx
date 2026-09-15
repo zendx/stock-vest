@@ -1,10 +1,17 @@
 import React from 'react';
+<<<<<<< HEAD
 import {ActivityIndicator, StyleSheet, View} from 'react-native';
+=======
+import {ActivityIndicator, View} from 'react-native';
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
 import {NavigationContainer} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {Ionicons} from '@expo/vector-icons';
+<<<<<<< HEAD
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
+=======
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
 import DashboardScreen from '../screens/DashboardScreen';
 import StocksScreen from '../screens/StocksScreen';
 import HoldingsScreen from '../screens/HoldingsScreen';
@@ -22,6 +29,7 @@ import TransactionDetailScreen from '../screens/TransactionDetailScreen';
 import UserSettingsScreen from '../screens/UserSettingsScreen';
 import {useSession} from '../hooks/useSession';
 import {useTheme} from '../theme';
+<<<<<<< HEAD
 import type {AuthStackParamList, MainStackParamList, TabParamList} from './types';
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
@@ -43,10 +51,20 @@ const BottomTabs = () => {
   const insets = useSafeAreaInsets();
   const activeBackground = theme.mode === 'dark' ? '#166534' : theme.palette.primary;
 
+=======
+
+const AuthStack = createNativeStackNavigator();
+const Tab = createBottomTabNavigator();
+const MainStack = createNativeStackNavigator();
+
+const BottomTabs = () => {
+  const theme = useTheme();
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
   return (
     <Tab.Navigator
       screenOptions={({route}) => ({
         headerShown: false,
+<<<<<<< HEAD
         tabBarShowLabel: false,
         tabBarHideOnKeyboard: true,
         tabBarActiveTintColor: '#FFFFFF',
@@ -85,6 +103,36 @@ const BottomTabs = () => {
       <Tab.Screen name="Holdings" component={HoldingsScreen} options={{tabBarAccessibilityLabel: 'Holdings'}} />
       <Tab.Screen name="Activity" component={ActivityScreen} options={{tabBarAccessibilityLabel: 'Activity'}} />
       <Tab.Screen name="Settings" component={SettingsScreen} options={{tabBarAccessibilityLabel: 'Settings'}} />
+=======
+        tabBarStyle: {
+          backgroundColor: theme.palette.surface,
+          borderTopColor: theme.palette.border,
+          height: 70,
+          paddingBottom: 12,
+          paddingTop: 8,
+        },
+        tabBarActiveTintColor: theme.palette.accent,
+        tabBarInactiveTintColor: theme.palette.muted,
+        tabBarIcon: ({color, size, focused}) => {
+          const nameMap: Record<string, keyof typeof Ionicons.glyphMap> = {
+            Dashboard: focused ? 'home' : 'home-outline',
+            Stocks: focused ? 'stats-chart' : 'stats-chart-outline',
+            Holdings: focused ? 'pie-chart' : 'pie-chart-outline',
+            Wallet: focused ? 'wallet' : 'wallet-outline',
+            Activity: focused ? 'time' : 'time-outline',
+            Settings: focused ? 'settings' : 'settings-outline',
+          };
+          return <Ionicons name={nameMap[route.name]} size={size} color={color} />;
+        },
+      })}
+    >
+      <Tab.Screen name="Dashboard" component={DashboardScreen} />
+      <Tab.Screen name="Stocks" component={StocksScreen} />
+      <Tab.Screen name="Holdings" component={HoldingsScreen} />
+      <Tab.Screen name="Wallet" component={WalletScreen} />
+      <Tab.Screen name="Activity" component={ActivityScreen} />
+      <Tab.Screen name="Settings" component={SettingsScreen} />
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
     </Tab.Navigator>
   );
 };
@@ -107,7 +155,10 @@ const AuthedNavigator = () => {
       }}
     >
       <MainStack.Screen name="Tabs" component={BottomTabs} options={{headerShown: false}} />
+<<<<<<< HEAD
       <MainStack.Screen name="Wallet" component={WalletScreen} options={{title: 'Wallet'}} />
+=======
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
       <MainStack.Screen name="Deposit" component={DepositScreen} options={{title: 'Deposit'}} />
       <MainStack.Screen name="Withdraw" component={WithdrawScreen} options={{title: 'Withdraw'}} />
       <MainStack.Screen name="Reinvest" component={ReinvestScreen} options={{title: 'Reinvest'}} />
@@ -137,6 +188,7 @@ const AppNavigator = () => {
   );
 };
 
+<<<<<<< HEAD
 const styles = StyleSheet.create({
   tabBar: {
     alignSelf: 'center',
@@ -169,4 +221,6 @@ const styles = StyleSheet.create({
   },
 });
 
+=======
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
 export default AppNavigator;

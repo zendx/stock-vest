@@ -4,13 +4,19 @@ export class ApiError extends Error {
   status?: number;
   constructor(message: string, status?: number) {
     super(message);
+<<<<<<< HEAD
     this.name = 'ApiError';
+=======
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
     this.status = status;
   }
 }
 
+<<<<<<< HEAD
 const REQUEST_TIMEOUT_MS = 15_000;
 
+=======
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
 const rawBaseUrl =
   process.env.EXPO_PUBLIC_API_BASE_URL ||
   (Constants.expoConfig?.extra?.apiBaseUrl as string | undefined) ||
@@ -35,6 +41,11 @@ const computeSiteBase = () => {
 };
 
 export const siteBaseUrl = computeSiteBase();
+<<<<<<< HEAD
+=======
+export const adminAjaxUrl = siteBaseUrl ? `${siteBaseUrl}/wp-admin/admin-ajax.php` : '';
+export const adminPostUrl = siteBaseUrl ? `${siteBaseUrl}/wp-admin/admin-post.php` : '';
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
 
 const buildUrl = (path: string) => {
   if (!apiBaseUrl) {
@@ -46,6 +57,7 @@ const buildUrl = (path: string) => {
 
 type RequestOptions = RequestInit & {
   token?: string;
+<<<<<<< HEAD
   timeoutMs?: number;
 };
 
@@ -57,10 +69,13 @@ const getErrorMessage = (body: unknown): string | undefined => {
   if (typeof error.error === 'string' && error.error.trim()) return error.error.trim();
   if (typeof error.data === 'string' && error.data.trim()) return error.data.trim();
   return getErrorMessage(error.data);
+=======
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
 };
 
 export const apiRequest = async <T>(path: string, options: RequestOptions = {}): Promise<T> => {
   const url = buildUrl(path);
+<<<<<<< HEAD
   const {
     token,
     timeoutMs = REQUEST_TIMEOUT_MS,
@@ -112,10 +127,32 @@ export const apiRequest = async <T>(path: string, options: RequestOptions = {}):
 
   if (!response.ok) {
     const message = getErrorMessage(json) || response.statusText || 'Request failed';
+=======
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string> | undefined),
+    ...(options.token ? {Authorization: `Bearer ${options.token}`} : {}),
+  };
+
+  const response = await fetch(url, {...options, headers});
+  const body = await response.text();
+
+  if (!response.ok) {
+    const message = body || response.statusText;
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
     throw new ApiError(message, response.status);
   }
 
   if (!body) return {} as T;
+<<<<<<< HEAD
   if (json === undefined) throw new ApiError('Failed to parse response JSON', response.status);
   return json as T;
+=======
+
+  try {
+    return JSON.parse(body) as T;
+  } catch (err) {
+    throw new ApiError('Failed to parse response JSON', response.status);
+  }
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
 };

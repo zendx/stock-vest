@@ -11,6 +11,7 @@ import {useTheme} from '../theme';
 import {submitBuyStock} from '../api/portfolio';
 import {useSession} from '../hooks/useSession';
 import {queryClient} from '../lib/queryClient';
+<<<<<<< HEAD
 import type {MainStackRouteProp} from '../navigation/types';
 import {showFinancialFlowError} from '../lib/financialFlow';
 
@@ -18,17 +19,39 @@ const BuyStockScreen = () => {
   const theme = useTheme();
   const route = useRoute<MainStackRouteProp<'BuyStock'>>();
   const {stock} = route.params;
+=======
+
+type StockParam = {
+  stock?: {
+    id: string;
+    name: string;
+    price: string;
+    rate: string;
+    status: string;
+  };
+};
+
+const BuyStockScreen = () => {
+  const theme = useTheme();
+  const route = useRoute();
+  const {stock} = (route.params as StockParam) || {};
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
   const [amount, setAmount] = useState('');
   const [units, setUnits] = useState('');
   const {token} = useSession();
 
   const mutation = useMutation({
+<<<<<<< HEAD
     mutationFn: (payload: {stockId: string; units?: string; amount?: string}) => submitBuyStock(payload, token),
+=======
+    mutationFn: (payload: {stockId?: string; units?: string; amount?: string}) => submitBuyStock(payload, token),
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ['balances']});
       queryClient.invalidateQueries({queryKey: ['transactions']});
       Alert.alert('Order placed', 'Your buy order is captured inside the app.');
     },
+<<<<<<< HEAD
     onError: (err: unknown) => showFinancialFlowError(err, 'Stock order', '/wsi/stocks/'),
   });
 
@@ -43,6 +66,20 @@ const BuyStockScreen = () => {
     }
     mutation.mutate({
       stockId: stock.id,
+=======
+    onError: (err: any) => {
+      Alert.alert('Order failed', err?.message || 'Unable to place order right now.');
+    },
+  });
+
+  const handleSubmit = () => {
+    if (!amount && !units) {
+      Alert.alert('Add order details', 'Specify an amount or units to continue.');
+      return;
+    }
+    mutation.mutate({
+      stockId: stock?.id,
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
       units: units.trim() || undefined,
       amount: amount.trim() || undefined,
     });
@@ -57,10 +94,17 @@ const BuyStockScreen = () => {
     <Screen>
       <View style={[styles.hero, {backgroundColor: theme.palette.primary}]}>
         <Typography variant="subtitle" weight="bold" style={{color: '#fff'}}>
+<<<<<<< HEAD
           {stock.name}
         </Typography>
         <Typography variant="caption" style={{color: '#E7F6ED', marginTop: 6}}>
           {`${stock.price} · ${stock.status}`}
+=======
+          {stock?.name || 'Buy Stock'}
+        </Typography>
+        <Typography variant="caption" style={{color: '#E7F6ED', marginTop: 6}}>
+          {stock ? `${stock.price} · ${stock.status}` : 'Place a buy order without leaving the app.'}
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
         </Typography>
       </View>
 
@@ -69,7 +113,11 @@ const BuyStockScreen = () => {
           Order Details
         </Typography>
         <Typography variant="caption" style={{color: theme.palette.muted, marginTop: 6}}>
+<<<<<<< HEAD
           Review the investment amount or units before continuing.
+=======
+          Connects to the WordPress buy stock flow.
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
         </Typography>
 
         <View style={{gap: 12, marginTop: 14}}>
@@ -113,7 +161,11 @@ const BuyStockScreen = () => {
           <View style={{flex: 1}}>
             <Typography weight="medium">Holdings sync</Typography>
             <Typography variant="caption" style={{color: theme.palette.muted, marginTop: 4}}>
+<<<<<<< HEAD
               Completed orders appear in Holdings and Activity.
+=======
+              Orders reflect in holdings and activity, matching stocks.php.
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
             </Typography>
           </View>
         </View>

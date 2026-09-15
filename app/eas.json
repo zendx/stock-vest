@@ -1,17 +1,25 @@
 {
   "cli": {
+<<<<<<< HEAD
     "version": ">= 12.0.0",
     "appVersionSource": "remote"
+=======
+    "version": ">= 10.0.0"
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
   },
   "build": {
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+<<<<<<< HEAD
       "environment": "development",
+=======
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://cofco.capital/sv/wp-json/wsi/v1"
       }
     },
+<<<<<<< HEAD
     "ios-simulator": {
       "extends": "development",
       "ios": {
@@ -21,14 +29,21 @@
     "preview": {
       "distribution": "internal",
       "environment": "preview",
+=======
+    "preview": {
+      "distribution": "internal",
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://cofco.capital/sv/wp-json/wsi/v1"
       }
     },
     "production": {
       "distribution": "store",
+<<<<<<< HEAD
       "environment": "production",
       "autoIncrement": true,
+=======
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://cofco.capital/sv/wp-json/wsi/v1"
       }

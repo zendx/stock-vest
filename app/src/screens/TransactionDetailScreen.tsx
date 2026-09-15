@@ -1,17 +1,38 @@
 import React from 'react';
+<<<<<<< HEAD
 import {useRoute} from '@react-navigation/native';
+=======
+import {RouteProp, useRoute} from '@react-navigation/native';
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
 import {View, StyleSheet} from 'react-native';
 import {Ionicons} from '@expo/vector-icons';
 import {Screen} from '../components/Screen';
 import {Surface} from '../components/Surface';
 import {Typography} from '../components/Typography';
 import {useTheme} from '../theme';
+<<<<<<< HEAD
 import type {MainStackRouteProp} from '../navigation/types';
 
 const TransactionDetailScreen = () => {
   const theme = useTheme();
   const route = useRoute<MainStackRouteProp<'TransactionDetail'>>();
   const {tx} = route.params;
+=======
+import {Transaction} from '../types';
+
+type ParamList = {
+  TransactionDetail: {
+    tx: Transaction;
+  };
+};
+
+const TransactionDetailScreen = () => {
+  const theme = useTheme();
+  const route = useRoute<RouteProp<ParamList, 'TransactionDetail'>>();
+  const tx = route.params?.tx;
+
+  if (!tx) return null;
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
 
   const rows = [
     {label: 'Description', value: tx.note || tx.title || '—'},
@@ -27,7 +48,11 @@ const TransactionDetailScreen = () => {
           Transaction
         </Typography>
         <Typography variant="caption" style={{color: '#E7F6ED', marginTop: 6}}>
+<<<<<<< HEAD
           Full details for this account activity.
+=======
+          Full details from your WordPress ledger.
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
         </Typography>
       </View>
 
@@ -55,7 +80,11 @@ const TransactionDetailScreen = () => {
           <View style={{flex: 1}}>
             <Typography weight="medium">History</Typography>
             <Typography variant="caption" style={{color: theme.palette.muted, marginTop: 4}}>
+<<<<<<< HEAD
               Open any item in Activity to review its full details.
+=======
+              Tap transactions in Activity to view details like on transactions.php.
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
             </Typography>
           </View>
         </View>

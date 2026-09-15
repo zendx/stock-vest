@@ -4582,6 +4582,7 @@ function wsi_apply_referral($user_id, $amount, $deposit_id = 0) {
 
     function wsi_rest_balance_snapshot($uid) {
         global $wpdb;
+<<<<<<< HEAD
         $balances = wsi_get_withdrawal_balances($uid);
         if ($balances['balance_error']) {
             return new WP_Error('wsi_balances_unavailable', 'Balances are temporarily unavailable.', ['status' => 503]);
@@ -4589,6 +4590,26 @@ function wsi_apply_referral($user_id, $amount, $deposit_id = 0) {
         $assets = $balances['total_assets'];
         $profit = $balances['available_balance'];
         $available = $balances['available_balance'];
+=======
+        $assets = wsi_get_main($uid);
+        $profit = wsi_get_profit($uid);
+
+        $t_dep = $wpdb->prefix . 'wsi_deposits';
+        $deposits = $wpdb->get_results(
+            $wpdb->prepare("SELECT amount, created_at FROM $t_dep WHERE user_id=%d AND status='approved'", $uid)
+        );
+
+        $now = current_time('timestamp');
+        $unlock_seconds = 60 * 24 * 60 * 60; // 60 days
+        $unlocked_assets = 0;
+        foreach ($deposits as $d) {
+            if (($now - strtotime($d->created_at)) >= $unlock_seconds) {
+                $unlocked_assets += floatval($d->amount);
+            }
+        }
+
+        $available = $profit + $unlocked_assets;
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
         $net = $assets + $profit;
 
         return [
@@ -4596,17 +4617,21 @@ function wsi_apply_referral($user_id, $amount, $deposit_id = 0) {
             'profit'      => round($profit, 2),
             'available'   => round($available, 2),
             'net'         => round($net, 2),
+<<<<<<< HEAD
             'totalAssetsLocked' => $balances['total_assets_locked'],
             'totalAssetsWithdrawable' => $balances['total_assets_withdrawable'],
             'totalAssetsUnlockedAmount' => $balances['total_assets_unlocked_amount'],
             'totalAssetsLockedAmount' => $balances['total_assets_locked_amount'],
             'totalAssetsUnlockAt' => $balances['total_assets_unlock_at'],
+=======
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
         ];
     }
 
     add_action('rest_api_init', function () {
         $ns = 'wsi/v1';
 
+<<<<<<< HEAD
         register_rest_route($ns, '/dashboard', [
             'methods' => WP_REST_Server::READABLE,
             'permission_callback' => function () { return is_user_logged_in(); },
@@ -4624,6 +4649,8 @@ function wsi_apply_referral($user_id, $amount, $deposit_id = 0) {
             },
         ]);
 
+=======
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
         register_rest_route($ns, '/auth/login', [
             'methods'             => WP_REST_Server::CREATABLE,
             'permission_callback' => '__return_true',
@@ -4741,6 +4768,7 @@ function wsi_apply_referral($user_id, $amount, $deposit_id = 0) {
                 $uid = intval($request->get_param('wsi_user_id'));
                 $t = $wpdb->prefix . 'wsi_transactions';
                 $rows = $wpdb->get_results(
+<<<<<<< HEAD
                     $wpdb->prepare(
                         "SELECT id, amount, type, description, created_at
                          FROM {$t}
@@ -4752,6 +4780,9 @@ function wsi_apply_referral($user_id, $amount, $deposit_id = 0) {
                         '%deposit%',
                         '%pending%'
                     )
+=======
+                    $wpdb->prepare("SELECT id, amount, type, description, created_at FROM {$t} WHERE user_id=%d ORDER BY created_at DESC LIMIT 100", $uid)
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
                 );
 
                 $map_status = function ($type) {
@@ -4920,7 +4951,12 @@ function wsi_apply_referral($user_id, $amount, $deposit_id = 0) {
             },
         ]);
     });
+<<<<<<< HEAD
     // Register routes before refreshing stored rewrite rules after an update.
+=======
+    /* Add Routes ------------------------/
+    -------------------------------------*/
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
     add_action('init', function () {
         add_rewrite_rule('^wsi/?$', 'index.php?sv_page=home', 'top');
         add_rewrite_rule('^wsi/([a-z-]+)/?$', 'index.php?sv_page=$matches[1]', 'top');

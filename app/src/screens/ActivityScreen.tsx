@@ -7,7 +7,10 @@ import {Typography} from '../components/Typography';
 import {Surface} from '../components/Surface';
 import {useTransactions} from '../hooks/useTransactions';
 import {useTheme} from '../theme';
+<<<<<<< HEAD
 import type {TabNavigationProp} from '../navigation/types';
+=======
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
 
 const parseAmount = (amount?: string) => {
   if (!amount) return 0;
@@ -18,7 +21,11 @@ const parseAmount = (amount?: string) => {
 const ActivityScreen = () => {
   const theme = useTheme();
   const {data: transactions = [], isLoading, error, refetch, isFetching} = useTransactions();
+<<<<<<< HEAD
   const navigation = useNavigation<TabNavigationProp<'Activity'>>();
+=======
+  const navigation = useNavigation();
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
   const [page, setPage] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -78,7 +85,11 @@ const ActivityScreen = () => {
   );
 
   return (
+<<<<<<< HEAD
     <Screen scroll={false} bottomInset={false}>
+=======
+    <Screen>
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
       <View style={[styles.hero, {backgroundColor: theme.palette.primary}]}>
         <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'}}>
           <Typography variant="subtitle" weight="bold" style={{color: '#fff'}}>
@@ -98,14 +109,21 @@ const ActivityScreen = () => {
       </Typography>
 
       <FlatList
+<<<<<<< HEAD
         style={styles.list}
+=======
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
         data={paginatedTransactions}
         keyExtractor={(item) => item.id}
         renderItem={({item}) => {
           const value = parseAmount(item.amount);
           const isPositive = value >= 0;
           return (
+<<<<<<< HEAD
             <Pressable onPress={() => navigation.navigate('TransactionDetail', {tx: item})}>
+=======
+            <Pressable onPress={() => navigation.navigate('TransactionDetail' as never, {tx: item} as never)}>
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
               <Surface style={styles.txCard}>
                 <View style={styles.txAvatar}>
                   <Typography weight="bold" style={{color: theme.palette.primary}}>
@@ -163,9 +181,12 @@ const ActivityScreen = () => {
 };
 
 const styles = StyleSheet.create({
+<<<<<<< HEAD
   list: {
     flex: 1,
   },
+=======
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
   hero: {
     padding: 16,
     borderRadius: 18,
@@ -198,6 +219,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+<<<<<<< HEAD
   paginationRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -214,6 +236,8 @@ const styles = StyleSheet.create({
   paginationDisabled: {
     opacity: 0.5,
   },
+=======
+>>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
   viewAllButton: {
     marginTop: 6,
     alignSelf: 'center',
