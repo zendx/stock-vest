@@ -5,11 +5,11 @@ import {Ionicons} from '@expo/vector-icons';
 import {Screen} from '../components/Screen';
 import {Typography} from '../components/Typography';
 import {Surface} from '../components/Surface';
-import {PrimaryButton} from '../components/PrimaryButton';
 import {useTheme} from '../theme';
 import {useSession} from '../hooks/useSession';
 import {useBalances} from '../hooks/useBalances';
 import {useTransactions} from '../hooks/useTransactions';
+import type {TabNavigationProp} from '../navigation/types';
 
 const formatCurrency = (value: number) => `$${value.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
 
@@ -18,10 +18,11 @@ const DashboardScreen = () => {
   const {data: balances, isLoading, error} = useBalances();
   const {data: transactions = []} = useTransactions();
   const theme = useTheme();
-  const navigation = useNavigation();
+  const navigation = useNavigation<TabNavigationProp<'Dashboard'>>();
   const {width} = useWindowDimensions();
+  const assetsLocked = balances?.totalAssetsLocked !== false;
   const errorMessage =
-    error instanceof Error ? error.message : 'Balance data unavailable. Check API configuration and auth.';
+    error instanceof Error ? error.message : 'Balance data is temporarily unavailable.';
 
   const balanceView = {
     totalAssets: balances?.totalAssets ?? 0,
@@ -34,8 +35,8 @@ const DashboardScreen = () => {
     {
       label: 'Total Assets',
       value: formatCurrency(balanceView.totalAssets),
-      delta: '+11.7%',
-      icon: 'trending-up-outline' as const,
+      delta: assetsLocked ? 'Locked' : 'Unlocked',
+      icon: assetsLocked ? 'lock-closed-outline' as const : 'lock-open-outline' as const,
       tone: theme.palette.success,
     },
     {
@@ -62,10 +63,10 @@ const DashboardScreen = () => {
   ];
 
   const quickActions = [
-    {label: 'Deposit', icon: 'arrow-down-circle-outline' as const, color: '#E5F7EE', action: () => navigation.navigate('Deposit' as never)},
-    {label: 'Withdraw', icon: 'arrow-up-circle-outline' as const, color: '#FDECEC', action: () => navigation.navigate('Withdraw' as never)},
-    {label: 'Reinvest', icon: 'refresh-circle-outline' as const, color: '#E7F0FF', action: () => navigation.navigate('Reinvest' as never)},
-    {label: 'More', icon: 'ellipsis-horizontal-circle-outline' as const, color: '#F4F5F7', action: () => navigation.navigate('Settings' as never)},
+    {label: 'Deposit', icon: 'arrow-down-circle-outline' as const, color: '#E5F7EE', action: () => navigation.navigate('Deposit')},
+    {label: 'Withdraw', icon: 'arrow-up-circle-outline' as const, color: '#FDECEC', action: () => navigation.navigate('Withdraw')},
+    {label: 'Reinvest', icon: 'refresh-circle-outline' as const, color: '#E7F0FF', action: () => navigation.navigate('Reinvest')},
+    {label: 'Wallet', icon: 'wallet-outline' as const, color: '#F4F5F7', action: () => navigation.navigate('Wallet')},
   ];
 
   const compactActionText = width < 380;
@@ -74,7 +75,7 @@ const DashboardScreen = () => {
   const recentTransactions = transactions.slice(0, 5);
 
   return (
-    <Screen>
+    <Screen bottomInset={false}>
       <View style={[styles.hero, {backgroundColor: theme.palette.primary}]}>
         <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'}}>
           <View>
@@ -86,7 +87,7 @@ const DashboardScreen = () => {
             </Typography>
           </View>
           <View style={styles.avatar}>
-            <Image source={require('../../assets/logo.png')} style={{width: 30, height: 30, resizeMode: 'contain'}} />
+            <Image source={require('../../assets/logo.png')} resizeMode="contain" style={{width: 30, height: 30}} />
           </View>
         </View>
 
@@ -96,6 +97,7 @@ const DashboardScreen = () => {
             <Typography variant="caption" style={{color: '#D1FAE5'}}>
               Total Assets
             </Typography>
+            <Ionicons name={assetsLocked ? 'lock-closed-outline' : 'lock-open-outline'} size={18} color="#D1FAE5" accessibilityLabel={assetsLocked ? 'Total assets locked' : 'Total assets unlocked'} />
           </View>
           <Typography variant="title" weight="bold" style={{color: '#fff', marginTop: 6}}>
             {formatCurrency(balanceView.totalAssets)}
@@ -121,7 +123,7 @@ const DashboardScreen = () => {
                 style={{
                   color: quickActionTextColor,
                   marginTop: 8,
-                  fontSize: 8,
+                  fontSize: compactActionText ? 9 : 10,
                   textAlign: 'center',
                   fontWeight: '600',
                   letterSpacing: 0.1,
@@ -139,9 +141,11 @@ const DashboardScreen = () => {
           <Typography variant="subtitle" weight="medium">
             Portfolio Overview
           </Typography>
-          <Typography variant="caption" style={{color: theme.palette.primary}}>
-            See All
-          </Typography>
+          <Pressable accessibilityRole="button" onPress={() => navigation.navigate('Holdings')}>
+            <Typography variant="caption" style={{color: theme.palette.primary}}>
+              See All
+            </Typography>
+          </Pressable>
         </View>
         <View style={styles.statGrid}>
           {stats.map((item) => (
@@ -170,7 +174,7 @@ const DashboardScreen = () => {
           <Typography variant="subtitle" weight="medium">
             Recent Transactions
           </Typography>
-          <Pressable onPress={() => navigation.navigate('Activity' as never)}>
+          <Pressable onPress={() => navigation.navigate('Activity')}>
             <Typography variant="caption" style={{color: theme.palette.primary}}>
               View All
             </Typography>
@@ -182,7 +186,7 @@ const DashboardScreen = () => {
           return (
             <Pressable
               key={tx.id}
-              onPress={() => navigation.navigate('TransactionDetail' as never, {tx} as never)}
+              onPress={() => navigation.navigate('TransactionDetail', {tx})}
               style={{marginBottom: 10}}
             >
               <Surface style={styles.txCard}>
@@ -207,7 +211,7 @@ const DashboardScreen = () => {
         {!isLoading && recentTransactions.length === 0 ? (
           <Surface muted style={{marginTop: 8}}>
             <Typography variant="caption" style={{color: theme.palette.muted}}>
-              No transactions yet. Mirror the WordPress ledger by performing a deposit or purchase.
+              No transactions yet. New account activity will appear here.
             </Typography>
           </Surface>
         ) : null}

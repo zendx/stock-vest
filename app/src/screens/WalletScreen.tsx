@@ -8,6 +8,7 @@ import {Surface} from '../components/Surface';
 import {PrimaryButton} from '../components/PrimaryButton';
 import {useTheme} from '../theme';
 import {useBalances} from '../hooks/useBalances';
+import type {MainStackNavigationProp} from '../navigation/types';
 
 const currency = (value: number) =>
   `$${value.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
@@ -16,7 +17,7 @@ const WalletScreen = () => {
   const theme = useTheme();
   const {data: balances, isLoading, error} = useBalances();
   const [amount, setAmount] = useState('');
-  const navigation = useNavigation();
+  const navigation = useNavigation<MainStackNavigationProp<'Wallet'>>();
 
   const view = useMemo(
     () => ({
@@ -27,15 +28,14 @@ const WalletScreen = () => {
     [balances],
   );
 
-  const lockedAssets = Math.max(view.totalAssets - view.available, 0);
+  const assetsLocked = balances?.totalAssetsLocked !== false;
 
   const applyPercent = (percent: number) => {
     const value = (view.profit * percent) / 100;
     setAmount(value ? value.toFixed(2) : '');
   };
 
-  const infoText =
-    'Reinvesting shifts funds from profit balance into your main balance. Wire this to your reinvest endpoint in the plugin.';
+  const infoText = 'Reinvesting moves funds from your profit balance into your main investment balance.';
 
   return (
     <Screen>
@@ -44,7 +44,7 @@ const WalletScreen = () => {
           Wallet
         </Typography>
         <Typography variant="caption" style={{color: '#E7F6ED', marginTop: 6}}>
-          Deposit, withdraw, and reinvest with the same rules as the WordPress flow.
+          Deposit, withdraw, and reinvest from one place.
         </Typography>
       </View>
 
@@ -68,18 +68,19 @@ const WalletScreen = () => {
       </View>
 
       <Surface style={{marginTop: 12}}>
-        <Typography variant="subtitle" weight="medium">
-          Locked assets
-        </Typography>
+        <View style={{flexDirection: 'row', alignItems: 'center', gap: 8}}>
+          <Typography variant="subtitle" weight="medium">Total Assets</Typography>
+          <Ionicons name={assetsLocked ? 'lock-closed-outline' : 'lock-open-outline'} size={18} color={assetsLocked ? theme.palette.danger : theme.palette.success} accessibilityLabel={assetsLocked ? 'Total assets locked' : 'Total assets unlocked'} />
+        </View>
         <Typography variant="body" style={{color: theme.palette.muted, marginTop: 4}}>
-          Funds currently farming
+          {assetsLocked ? 'Locked during the investment period' : 'Unlocked for withdrawal'}
         </Typography>
         <Typography variant="title" weight="bold" style={{marginTop: 10}}>
-          {currency(lockedAssets)}
+          {currency(view.totalAssets)}
         </Typography>
         <View style={{flexDirection: 'row', gap: 10, marginTop: 12}}>
-          <PrimaryButton label="Deposit" style={{flex: 1}} onPress={() => navigation.navigate('Deposit' as never)} />
-          <PrimaryButton label="Withdraw" style={{flex: 1}} onPress={() => navigation.navigate('Withdraw' as never)} />
+          <PrimaryButton label="Deposit" style={{flex: 1}} onPress={() => navigation.navigate('Deposit')} />
+          <PrimaryButton label="Withdraw" style={{flex: 1}} onPress={() => navigation.navigate('Withdraw')} />
         </View>
       </Surface>
 
@@ -123,7 +124,12 @@ const WalletScreen = () => {
         <Typography variant="caption" style={{color: theme.palette.muted, marginTop: 8}}>
           {infoText}
         </Typography>
-        <PrimaryButton label="Reinvest" fullWidth style={{marginTop: 12}} onPress={() => navigation.navigate('Reinvest' as never)} />
+        <PrimaryButton
+          label="Reinvest"
+          fullWidth
+          style={{marginTop: 12}}
+          onPress={() => navigation.navigate('Reinvest', amount ? {amount} : undefined)}
+        />
       </Surface>
 
       <Surface muted style={{marginTop: 16}}>
@@ -131,8 +137,7 @@ const WalletScreen = () => {
           Methods
         </Typography>
         <Typography variant="body" style={{color: theme.palette.muted, marginTop: 8}}>
-          Support for bank/manual deposits, USDT (TRC/ERC), ETH, SOL - mirroring plugin settings. Wire the buttons to
-          REST endpoints for submission + status tracking.
+          Bank transfer and supported digital asset methods are confirmed on the secure transaction page.
         </Typography>
       </Surface>
 
@@ -143,7 +148,7 @@ const WalletScreen = () => {
       ) : null}
       {error ? (
         <Typography variant="caption" style={{color: theme.palette.warning, marginTop: 8}}>
-          Unable to load balances. Set EXPO_PUBLIC_API_BASE_URL and ensure auth tokens are valid.
+          Balances are temporarily unavailable. Pull down or sign in again to retry.
         </Typography>
       ) : null}
     </Screen>

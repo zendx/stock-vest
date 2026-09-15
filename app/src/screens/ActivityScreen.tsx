@@ -7,6 +7,7 @@ import {Typography} from '../components/Typography';
 import {Surface} from '../components/Surface';
 import {useTransactions} from '../hooks/useTransactions';
 import {useTheme} from '../theme';
+import type {TabNavigationProp} from '../navigation/types';
 
 const parseAmount = (amount?: string) => {
   if (!amount) return 0;
@@ -17,7 +18,7 @@ const parseAmount = (amount?: string) => {
 const ActivityScreen = () => {
   const theme = useTheme();
   const {data: transactions = [], isLoading, error, refetch, isFetching} = useTransactions();
-  const navigation = useNavigation();
+  const navigation = useNavigation<TabNavigationProp<'Activity'>>();
   const [page, setPage] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -77,7 +78,7 @@ const ActivityScreen = () => {
   );
 
   return (
-    <Screen>
+    <Screen scroll={false} bottomInset={false}>
       <View style={[styles.hero, {backgroundColor: theme.palette.primary}]}>
         <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'}}>
           <Typography variant="subtitle" weight="bold" style={{color: '#fff'}}>
@@ -97,13 +98,14 @@ const ActivityScreen = () => {
       </Typography>
 
       <FlatList
+        style={styles.list}
         data={paginatedTransactions}
         keyExtractor={(item) => item.id}
         renderItem={({item}) => {
           const value = parseAmount(item.amount);
           const isPositive = value >= 0;
           return (
-            <Pressable onPress={() => navigation.navigate('TransactionDetail' as never, {tx: item} as never)}>
+            <Pressable onPress={() => navigation.navigate('TransactionDetail', {tx: item})}>
               <Surface style={styles.txCard}>
                 <View style={styles.txAvatar}>
                   <Typography weight="bold" style={{color: theme.palette.primary}}>
@@ -161,6 +163,9 @@ const ActivityScreen = () => {
 };
 
 const styles = StyleSheet.create({
+  list: {
+    flex: 1,
+  },
   hero: {
     padding: 16,
     borderRadius: 18,
@@ -192,6 +197,22 @@ const styles = StyleSheet.create({
     backgroundColor: '#E5F6EC',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  paginationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 14,
+  },
+  paginationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: 40,
+    paddingHorizontal: 10,
+  },
+  paginationDisabled: {
+    opacity: 0.5,
   },
   viewAllButton: {
     marginTop: 6,

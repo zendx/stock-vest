@@ -19,6 +19,10 @@ export const PrimaryButton = ({label, onPress, fullWidth = false, style, compact
     <Pressable
       onPress={disabled ? undefined : onPress}
       style={[fullWidth && {width: '100%'}, disabled && {opacity: 0.6}, style]}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{disabled}}
+      hitSlop={compact ? 4 : undefined}
       android_ripple={{color: '#ffffff22'}}
       disabled={disabled}
     >

@@ -8,10 +8,14 @@ export const fetchUserProfile = (token?: string) =>
   });
 
 export const updateUserProfile = (payload: Partial<UserProfile>, token?: string) => {
-  const normalized = {
-    ...payload,
-    smart_farming: payload.smartFarming === true ? 'yes' : payload.smartFarming === false ? 'no' : payload.smartFarming,
-  };
+  const normalized = Object.keys(payload).reduce<Record<string, unknown>>((result, key) => {
+    const value = payload[key as keyof UserProfile];
+    const snakeCaseKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+    result[snakeCaseKey] =
+      snakeCaseKey === 'smart_farming' && typeof value === 'boolean' ? (value ? 'yes' : 'no') : value;
+    return result;
+  }, {});
+
   return apiRequest<{success: boolean; profile: UserProfile}>('/profile', {
     method: 'POST',
     token,

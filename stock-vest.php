@@ -1,8 +1,8 @@
-﻿    <?php
+﻿<?php
     /**
      * Plugin Name: WSI - Single-file Investment Plugin
      * Description: A self-contained â€œinvestment platformâ€ WordPress plugin.
-     * Version: 1.0.0
+     * Version: 1.0.7
      * Author: HAPPY GILMORE
      * Text Domain: wsi
      */
@@ -64,6 +64,9 @@
             if (!in_array('account_details', (array)$cols_w, true)) {
                 $wpdb->query("ALTER TABLE `$t_w` ADD COLUMN `account_details` TEXT NULL");
             }
+            if (!in_array('source', (array)$cols_w, true)) {
+                $wpdb->query("ALTER TABLE `$t_w` ADD COLUMN `source` VARCHAR(32) NOT NULL DEFAULT 'available_balance' AFTER amount");
+            }
         }
         }
     }
@@ -75,7 +78,9 @@
     ------------------------------------------------------------------------- */
     define('WSI_FILE', __FILE__);
     define('WSI_DIR', plugin_dir_path(__FILE__));
-    define('WSI_VER', '1.0.4');
+    define('WSI_VER', '1.0.7');
+    require_once WSI_DIR . 'includes/withdrawals.php';
+    require_once WSI_DIR . 'includes/deposits.php';
 
     // Load translations for this plugin
     add_action('plugins_loaded', function () {
@@ -229,6 +234,7 @@
           id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
           user_id BIGINT UNSIGNED NOT NULL,
           amount DECIMAL(14,2) NOT NULL,
+          source VARCHAR(32) NOT NULL DEFAULT 'available_balance',
           method VARCHAR(80) DEFAULT '',
           account_details TEXT,
           status VARCHAR(32) DEFAULT 'pending',
@@ -474,8 +480,59 @@
         // Total combined profit
         return $daily_profit + $accumulated;
     }
+
+    function wsi_get_withdrawal_balances($uid) {
+        global $wpdb;
+
+        $total_assets = wsi_get_main($uid);
+        $available_balance = wsi_get_profit($uid);
+        $balance_error = !empty($wpdb->last_error);
+        $locked_amount = 0;
+        $lock_until = 0;
+        $t_dep = $wpdb->prefix . 'wsi_deposits';
+        $deposits = $wpdb->get_results($wpdb->prepare(
+            "SELECT amount, created_at, approved_at FROM $t_dep WHERE user_id=%d AND status='approved'",
+            $uid
+        ));
+
+        $balance_error = $balance_error || !empty($wpdb->last_error) || !is_array($deposits);
+
+        $unlock_seconds = wsi_get_deposit_unlock_days() * DAY_IN_SECONDS;
+        $now = time();
+        foreach ((array) $deposits as $deposit) {
+            // Deposit dates are stored in the site's timezone; expose a real UTC instant.
+            $date = $deposit->approved_at ?: $deposit->created_at;
+            $approved = DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $date, wp_timezone());
+            if (!$approved || $approved->format('Y-m-d H:i:s') !== $date) {
+                $locked_amount += max(0, (float) $deposit->amount); // Keep undated deposits locked.
+                continue;
+            }
+            $unlock_at = $approved->getTimestamp() + $unlock_seconds;
+            if ($unlock_at > $now) {
+                $locked_amount += max(0, (float) $deposit->amount);
+                $lock_until = $lock_until ? min($lock_until, $unlock_at) : $unlock_at;
+            }
+        }
+
+        $locked_amount = $balance_error ? max(0, $total_assets) : min(max(0, $total_assets), $locked_amount);
+        $unlocked_amount = round(max(0, $total_assets - $locked_amount), 2);
+        $locked = $balance_error || ($locked_amount > 0 && $unlocked_amount <= 0);
+        return [
+            'total_assets_locked_amount' => round($locked_amount, 2),
+            'total_assets_unlocked_amount' => $unlocked_amount,
+            'balance_error' => $balance_error,
+            'total_assets' => round($total_assets, 2),
+            'available_balance' => round($available_balance, 2),
+            'total_assets_locked' => $locked,
+            'total_assets_withdrawable' => !$locked,
+            'total_assets_unlock_at' => $lock_until ? gmdate('c', $lock_until) : null,
+        ];
+    }
     function wsi_inc_main($uid, $d) { wsi_set_main($uid, wsi_get_main($uid) + floatval($d)); }
-    function wsi_inc_profit($uid, $d) { wsi_set_profit($uid, wsi_get_profit($uid) + floatval($d)); }
+    function wsi_inc_profit($uid, $d) {
+        // Holding profits are already included when reading the balance.
+        wsi_set_profit($uid, floatval(get_user_meta($uid, 'wsi_profit_balance', true)) + floatval($d));
+    }
 
     /*-------------------------------------------------------------
         STock Dedct elper
@@ -689,8 +746,8 @@ function wsi_trigger_transaction_email($user_id, $type, $amount) {
 
         $code = wsi_ensure_invite_code($uid);
 
-        // Return pretty URL: site.com/wsi/signup/CODE
-        return site_url("wsi/signup/?ref=$code");
+        // Encode the referral code so spaces and other characters remain intact in the URL.
+        return add_query_arg('ref', $code, site_url('wsi/signup/'));
     }
 
     function wsi_get_register_page() {
@@ -1172,60 +1229,16 @@ add_action('user_register', function($user_id) {
             $id = intval($_POST['withdraw_id']);
             $action = sanitize_text_field($_POST['action_withdraw']);
             
-            $row = $wpdb->get_row($wpdb->prepare("SELECT * FROM $t WHERE id=%d", $id));
-            
-            if ($row) {
-                if ($action === 'approve') {
-                    $updated = $wpdb->update(
-                        $t, 
-                        [
-                            'status' => 'approved',
-                            'admin_note' => 'Paid by Admin ID: ' . get_current_user_id() . ' on ' . current_time('mysql')
-                        ], 
-                        ['id' => $id],
-                        ['%s', '%s'],
-                        ['%d']
-                    );
-                    
-                    if ($updated !== false) {
-                        wsi_log_tx($row->user_id, $row->amount, 'withdraw_approved', "Withdrawal #{$id} approved");
-                        wsi_notify_user($row->user_id, 'Withdrawal Approved', "Your withdrawal of $" . number_format($row->amount, 2) . " has been processed and sent.");
-                        wsi_audit(get_current_user_id(), 'approve_withdraw', "Approved withdrawal #{$id} for user #{$row->user_id}");
-                        echo '<div class="notice notice-success"><p>Withdrawal approved successfully.</p></div>';
-                    } else {
-                        error_log('WSI: Failed to approve withdrawal #' . $id . ' - ' . $wpdb->last_error);
-                        echo '<div class="notice notice-error"><p>Failed to approve withdrawal. Check error logs.</p></div>';
-                    }
-                    
-                } elseif ($action === 'decline') {
-                    $updated = $wpdb->update(
-                        $t, 
-                        [
-                            'status' => 'declined',
-                            'admin_note' => 'Declined by Admin ID: ' . get_current_user_id() . ' on ' . current_time('mysql')
-                        ], 
-                        ['id' => $id],
-                        ['%s', '%s'],
-                        ['%d']
-                    );
-                    
-                    if ($updated !== false) {
-                        // Refund to profit balance
-                        wsi_inc_profit($row->user_id, floatval($row->amount));
-                        wsi_log_tx($row->user_id, $row->amount, 'withdraw_refund', "Withdrawal #{$id} declined, amount refunded to profit balance");
-                        wsi_notify_user($row->user_id, 'Withdrawal Declined', 'Your withdrawal request was declined and the amount has been refunded to your profit balance.');
-                        wsi_audit(get_current_user_id(), 'decline_withdraw', "Declined withdrawal #{$id} for user #{$row->user_id}");
-                        echo '<div class="notice notice-success"><p>Withdrawal declined and refunded.</p></div>';
-                    } else {
-                        error_log('WSI: Failed to decline withdrawal #' . $id . ' - ' . $wpdb->last_error);
-                        echo '<div class="notice notice-error"><p>Failed to decline withdrawal. Check error logs.</p></div>';
-                    }
-                }
+            $result = wsi_process_withdrawal_request($id, $action);
+            if (is_wp_error($result)) {
+                echo '<div class="notice notice-error"><p>' . esc_html($result->get_error_message()) . '</p></div>';
             } else {
-                echo '<div class="notice notice-error"><p>Withdrawal request not found.</p></div>';
+                $message = $action === 'approve' ? 'Withdrawal approved successfully.' : 'Withdrawal declined and refunded.';
+                echo '<div class="notice notice-success"><p>' . esc_html($message) . '</p></div>';
             }
         }
         
+
         // Load pending withdrawals with error handling
         $rows = $wpdb->get_results($wpdb->prepare(
             "SELECT * FROM $t WHERE TRIM(LOWER(status))=%s ORDER BY created_at DESC",
@@ -1252,8 +1265,9 @@ add_action('user_register', function($user_id) {
                             <th>User</th>
                             <th>Email</th>
                             <th>Amount</th>
-                            <th>Network</th>
-                            <th>Wallet Address</th>
+                            <th>Source</th>
+                            <th>Payout Method</th>
+                            <th>Bank / Wallet Details</th>
                             <th>Requested</th>
                             <th>Actions</th>
                         </tr>
@@ -1261,8 +1275,9 @@ add_action('user_register', function($user_id) {
                     <tbody>
                     <?php foreach ($rows as $r) { 
                         $u = get_userdata($r->user_id);
-                        $method = !empty($r->method) ? esc_html($r->method) : 'N/A';
+                        $method = $r->method === 'bank' ? 'Bank Account' : (!empty($r->method) ? esc_html($r->method) : 'N/A');
                         $wallet = !empty($r->account_details) ? esc_html($r->account_details) : 'Not provided';
+                        $source = isset($r->source) && $r->source === 'total_assets' ? 'Total Assets' : 'Available Balance';
                     ?>
                         <tr>
                             <td><?php echo intval($r->id); ?></td>
@@ -1274,6 +1289,7 @@ add_action('user_register', function($user_id) {
                             </td>
                             <td><?php echo esc_html($u ? $u->user_email : 'N/A'); ?></td>
                             <td><strong>$<?php echo number_format($r->amount, 2); ?></strong></td>
+                            <td><?php echo esc_html($source); ?></td>
                             <td><?php echo $method; ?></td>
                             <td>
                                 <code style="word-break:break-all;display:block;max-width:250px;">
@@ -2092,37 +2108,14 @@ add_action('user_register', function($user_id) {
         $t_dep = $wpdb->prefix . 'wsi_deposits';
         $t_wd = $wpdb->prefix . 'wsi_withdrawals';
 
-        // Original balances
-        $assets = wsi_get_main($uid);
-        $profit_income = wsi_get_profit($uid);
+        $balance_snapshot = wsi_get_withdrawal_balances($uid);
+        $assets = $balance_snapshot['total_assets'];
+        $profit_income = $balance_snapshot['available_balance'];
 
         // Net margin = assets + profit income
         $net_margin = $assets + $profit_income;
 
-        // Compute available balance for unlocked deposits
-        $deposits = $wpdb->get_results(
-            $wpdb->prepare("SELECT amount, created_at, approved_at FROM $t_dep WHERE user_id=%d AND status='approved'", $uid)
-        );
-
-        $now = current_time('timestamp');
-        $unlock_days = wsi_get_deposit_unlock_days();
-        $unlock_seconds = $unlock_days * 24 * 60 * 60;
-
-        $approved_total = 0;
-        $unlocked_assets = 0;
-        foreach ($deposits as $d) {
-            $amount_dep = floatval($d->amount);
-            $approved_total += $amount_dep;
-            $unlock_date = $d->approved_at ?: $d->created_at;
-            if (($now - strtotime($unlock_date)) >= $unlock_seconds) {
-                $unlocked_assets += $amount_dep;
-            }
-        }
-
-        // Available = profit + unlocked portion of main balance (locked deposits remain locked)
-        $locked_assets = max(0, $approved_total - $unlocked_assets);
-        $unlocked_available = max(0, $assets - $locked_assets);
-        $available_balance = $profit_income + $unlocked_available;
+        $available_balance = $balance_snapshot['available_balance'];
 
         $assets = number_format($assets, 2);
         $profit_income = number_format($profit_income, 2);
@@ -2638,6 +2631,12 @@ add_action('user_register', function($user_id) {
                     <input type="hidden" name="action" value="wsi_submit_withdraw">
                     <?php wp_nonce_field('wsi_withdraw_nonce'); ?>
 
+                    <label for="wsi-shortcode-withdraw-source">Withdraw From</label>
+                    <select id="wsi-shortcode-withdraw-source" name="withdrawal_source" required>
+                        <option value="available_balance">Available Balance ($<?php echo $available_balance; ?>)</option>
+                        <option value="total_assets" <?php disabled($balance_snapshot['total_assets_locked']); ?>>Total Assets ($<?php echo $assets; ?>) - <?php echo $balance_snapshot['total_assets_locked'] ? 'Locked' : 'Unlocked'; ?></option>
+                    </select>
+
                     <!-- Amount Input -->
                     <div>
                         <input name="amount" type="number" step="0.01" placeholder="Amount" required>
@@ -3007,9 +3006,12 @@ add_action('user_register', function($user_id) {
             
             wp_send_json_success([
                 'message' => 'Deposit submitted successfully',
-                'redirect' => add_query_arg('deposit', 'success', site_url('/wsi/deposit/')),
-                'redirect_to' => add_query_arg('deposit', 'success', site_url('/wsi/deposit/')),
+                'redirect' => add_query_arg('deposit_id', $deposit_id, site_url('/wsi/deposit/')),
+                'redirect_to' => add_query_arg('deposit_id', $deposit_id, site_url('/wsi/deposit/')),
                 'deposit_id' => $deposit_id,
+                'status' => 'pending',
+                'elapsed_seconds' => 0,
+                'estimated_seconds' => 30 * MINUTE_IN_SECONDS,
                 'amount_usd' => $amount_usd,
                 'amount_local' => $amount_local,
                 'payment_type' => $payment_type,
@@ -3079,7 +3081,7 @@ add_action('user_register', function($user_id) {
             $user_label = wsi_get_user_label($uid);
             wsi_notify_admin('New Deposit', "{$user_label} submitted deposit of $" . number_format($amount_usd, 2));
             
-            wp_safe_redirect(add_query_arg('deposit', 'success', $redirect_to));
+            wp_safe_redirect(add_query_arg('deposit_id', $deposit_id, $redirect_to));
             exit;
         } catch (Exception $e) {
             error_log('WSI: Deposit handler error - ' . $e->getMessage());
@@ -3122,6 +3124,7 @@ add_action('user_register', function($user_id) {
     /* Withdraw submit */
     add_action('admin_post_wsi_submit_withdraw', 'wsi_handle_withdraw');
     add_action('wp_ajax_wsi_submit_withdraw', 'wsi_handle_withdraw');
+    add_action('wp_ajax_nopriv_wsi_submit_withdraw', 'wsi_handle_withdraw');
     
     function wsi_set_profit($uid, $amount) {
         update_user_meta($uid, 'wsi_profit_balance', floatval($amount));
@@ -3154,147 +3157,50 @@ add_action('user_register', function($user_id) {
     
     $uid        = get_current_user_id();
     $user_label = wsi_get_user_label($uid);
-    $amount     = round(floatval($_POST['amount'] ?? 0), 2);
-    $acct       = sanitize_textarea_field($_POST['account_details'] ?? '');
-    $method     = sanitize_text_field($_POST['crypto_type'] ?? '');
-    
-    if ($amount <= 0) { 
-        if ($is_ajax) {
-            wp_send_json_error(['message' => 'Invalid withdrawal amount']);
-        } else {
-            wsi_popup("Invalid Withdrawal Amount", $dash_url);
-            exit;
-        }
+    $amount = $_POST['amount'] ?? '';
+    $source = is_string($_POST['withdrawal_source'] ?? null) ? wp_unslash($_POST['withdrawal_source']) : '';
+    $acct = sanitize_textarea_field(wp_unslash($_POST['account_details'] ?? ''));
+    $method = sanitize_text_field(wp_unslash($_POST['crypto_type'] ?? ''));
+    $payout = sanitize_key($_POST['payout_method'] ?? 'crypto');
+    $bank_name = sanitize_text_field(wp_unslash($_POST['bank_name'] ?? ''));
+    if ($payout === 'bank') {
+        $method = 'bank';
+        $acct = sanitize_text_field(wp_unslash($_POST['account_number'] ?? ''));
     }
-    
-    global $wpdb;
-    
-    /* ------------------------------------------------------
-       1. Calculate UNLOCKED deposits (unlock rule)
-    ------------------------------------------------------- */
-    $t_dep = $wpdb->prefix . 'wsi_deposits';
-    $deps = $wpdb->get_results($wpdb->prepare(
-        "SELECT amount, created_at, approved_at FROM $t_dep WHERE user_id=%d AND status='approved'",
-        $uid
-    ));
-    
-    $now = current_time('timestamp');
-    $unlock_days = wsi_get_deposit_unlock_days();
-    $unlock_seconds = $unlock_days * 24 * 60 * 60;
-    $approved_total = 0;
-    $unlocked = 0;
-    
-    foreach ($deps as $d) {
-        $amount_dep = floatval($d->amount);
-        $approved_total += $amount_dep;
-        $unlock_date = $d->approved_at ?: $d->created_at;
-        if (($now - strtotime($unlock_date)) >= $unlock_seconds) {
-            $unlocked += $amount_dep;
-        }
+    $result = in_array($payout, ['bank', 'crypto'], true)
+        ? wsi_create_withdrawal_request($uid, $amount, $source, $method, $acct, $bank_name)
+        : new WP_Error('wsi_payout', 'Select Bank Account or Crypto.');
+    if (is_wp_error($result)) {
+        if ($is_ajax) wp_send_json_error(['message' => $result->get_error_message()]);
+        wsi_popup($result->get_error_message(), $redirect_url);
+        exit;
     }
-    
-    /* ------------------------------------------------------
-       2. Calculate PROFIT: meta + accumulated holding profits
-    ------------------------------------------------------- */
-    $meta_profit = floatval(get_user_meta($uid, 'wsi_profit_balance', true));
-    $t_hold = $wpdb->prefix . 'wsi_holdings';
-    $accumulated_hold_profit = floatval($wpdb->get_var($wpdb->prepare(
-        "SELECT SUM(accumulated_profit) FROM $t_hold WHERE user_id=%d AND status='open'",
-        $uid
-    )));
-    $total_profit = $meta_profit + $accumulated_hold_profit;
-    
-    /* ------------------------------------------------------
-       3. Total available = unlocked deposits + profit
-    ------------------------------------------------------- */
-    // Available = profit + unlocked portion of main balance (locked deposits remain locked)
-    $locked_assets = max(0, $approved_total - $unlocked);
-    $unlocked_available = max(0, wsi_get_main($uid) - $locked_assets);
-    $available = $unlocked_available + $total_profit;
-    
-    if ($amount > $available) {
-        if ($is_ajax) {
-            wp_send_json_error(['message' => 'Insufficient Withdrawable Balance. Available: $' . number_format($available, 2)]);
-        } else {
-            wsi_popup("Insufficient Withdrawable Balance", $dash_url);
-            exit;
-        }
-    }
-    
-    $remaining = $amount;
-    
-    /* ------------------------------------------------------
-       4. Deduct from META PROFIT first
-    ------------------------------------------------------- */
-    if ($meta_profit > 0) {
-        $use_meta = min($meta_profit, $remaining);
-        update_user_meta($uid, 'wsi_profit_balance', $meta_profit - $use_meta);
-        $remaining -= $use_meta;
-    }
-    
-    /* ------------------------------------------------------
-       5. Deduct from HOLDINGS accumulated_profit next (FIFO)
-    ------------------------------------------------------- */
-    if ($remaining > 0) {
-        $holdings = $wpdb->get_results($wpdb->prepare(
-            "SELECT id, accumulated_profit FROM $t_hold WHERE user_id=%d AND status='open' ORDER BY created_at ASC",
-            $uid
-        ));
-        foreach ($holdings as $h) {
-            if ($remaining <= 0) break;
-            $use = min(floatval($h->accumulated_profit), $remaining);
-            $wpdb->query($wpdb->prepare(
-                "UPDATE $t_hold SET accumulated_profit = accumulated_profit - %f WHERE id=%d",
-                $use, $h->id
-            ));
-            $remaining -= $use;
-        }
-    }
-    
-    /* ------------------------------------------------------
-       6. Deduct from UNLOCKED deposits (main balance)
-    ------------------------------------------------------- */
-    if ($remaining > 0) {
-        $current_main = floatval(wsi_get_main($uid));
-        wsi_set_main($uid, $current_main - $remaining);
-        $remaining = 0;
-    }
-    
-    /* ------------------------------------------------------
-       7. Record withdrawal request
-    ------------------------------------------------------- */
-    $t = $wpdb->prefix . 'wsi_withdrawals';
-    $inserted = $wpdb->insert($t, [
-        'user_id'         => $uid,
-        'amount'          => $amount,
-        'method'          => $method,
-        'account_details' => $acct,
-        'status'          => 'pending',
-        'created_at'      => current_time('mysql')
-    ]);
-    
-    if ($inserted === false) {
-        error_log('WSI: Withdraw insert failed - ' . $wpdb->last_error);
-        if ($is_ajax) {
-            wp_send_json_error(['message' => 'Database error occurred']);
-        } else {
-            wsi_popup("Database Error", $dash_url);
-            exit;
-        }
-    }
-    
+    $amount = $result['amount'];
+    $source_label = $source === 'total_assets' ? 'Total Assets' : 'Available Balance';
+
+    // The request is already committed. Notification failures must not imply it failed.
+    ob_start();
+    try {
     // Log transaction
-    wsi_log_tx($uid, $amount, 'withdraw_request', 'Withdrawal requested');
-    wsi_audit($uid, 'withdraw_request', "Requested $amount");
+    wsi_log_tx($uid, $amount, 'withdraw_request', 'Withdrawal requested from ' . $source_label, ['source' => $source, 'withdrawal_id' => $result['withdrawal_id']]);
+    wsi_audit($uid, 'withdraw_request', "Requested $amount from $source_label");
     // Notify admin and user even during AJAX (front-end uses AJAX)
     wsi_notify_admin('Withdrawal Requested', "{$user_label} requested withdrawal of $" . number_format($amount, 2));
     wsi_send_email_template($uid, 'email_withdraw_received', ['amount' => $amount]);
+
+    } catch (Throwable $error) {
+        error_log('WSI withdrawal notification failed: ' . $error->getMessage());
+    } finally {
+        $unexpected_output = ob_get_clean();
+        if ($unexpected_output !== '') error_log('WSI withdrawal notification emitted unexpected output.');
+    }
 
     // Return response
     if ($is_ajax) {
         wp_send_json_success([
             'message' => 'Withdrawal request submitted successfully',
-            'withdrawal_id' => $wpdb->insert_id,
+            'withdrawal_id' => $result['withdrawal_id'],
+            'source' => $source,
             'amount' => $amount
         ]);
     } else {
@@ -3337,34 +3243,11 @@ add_action('user_register', function($user_id) {
                 wp_send_json_error(['message' => 'Invalid withdrawal ID']);
             }
             
-            global $wpdb;
-            $t = $wpdb->prefix . 'wsi_withdrawals';
-            $row = $wpdb->get_row($wpdb->prepare("SELECT * FROM $t WHERE id=%d", $withdraw_id));
-            
-            if (!$row) {
-                wp_send_json_error(['message' => 'Withdrawal not found']);
+            $result = wsi_process_withdrawal_request($withdraw_id, 'approve');
+            if (is_wp_error($result)) {
+                wp_send_json_error(['message' => $result->get_error_message()]);
             }
-            
-            $updated = $wpdb->update(
-                $t,
-                [
-                    'status' => 'approved',
-                    'admin_note' => 'Paid by Admin ID: ' . get_current_user_id() . ' on ' . current_time('mysql')
-                ],
-                ['id' => $withdraw_id],
-                ['%s', '%s'],
-                ['%d']
-            );
-            
-            if ($updated !== false) {
-                wsi_log_tx($row->user_id, $row->amount, 'withdraw_approved', "Withdrawal #{$withdraw_id} approved");
-                wsi_notify_user($row->user_id, 'Withdrawal Approved', "Your withdrawal of $" . number_format($row->amount, 2) . " has been processed and sent.");
-                wsi_audit(get_current_user_id(), 'approve_withdraw', "Approved withdrawal #{$withdraw_id} for user #{$row->user_id}");
-                wp_send_json_success(['message' => 'Withdrawal approved successfully']);
-            } else {
-                error_log('WSI: Failed to approve withdrawal #' . $withdraw_id . ' - ' . $wpdb->last_error);
-                wp_send_json_error(['message' => 'Failed to approve withdrawal']);
-            }
+            wp_send_json_success(['message' => 'Withdrawal approved successfully']);
         }
     }
     add_action('wp_ajax_wsi_admin_approve_withdrawal', 'wsi_admin_approve_withdrawal');
@@ -3384,35 +3267,11 @@ add_action('user_register', function($user_id) {
                 wp_send_json_error(['message' => 'Invalid withdrawal ID']);
             }
             
-            global $wpdb;
-            $t = $wpdb->prefix . 'wsi_withdrawals';
-            $row = $wpdb->get_row($wpdb->prepare("SELECT * FROM $t WHERE id=%d", $withdraw_id));
-            
-            if (!$row) {
-                wp_send_json_error(['message' => 'Withdrawal not found']);
+            $result = wsi_process_withdrawal_request($withdraw_id, 'decline');
+            if (is_wp_error($result)) {
+                wp_send_json_error(['message' => $result->get_error_message()]);
             }
-            
-            $updated = $wpdb->update(
-                $t,
-                [
-                    'status' => 'declined',
-                    'admin_note' => 'Declined by Admin ID: ' . get_current_user_id() . ' on ' . current_time('mysql')
-                ],
-                ['id' => $withdraw_id],
-                ['%s', '%s'],
-                ['%d']
-            );
-            
-            if ($updated !== false) {
-                wsi_inc_profit($row->user_id, floatval($row->amount));
-                wsi_log_tx($row->user_id, $row->amount, 'withdraw_refund', "Withdrawal #{$withdraw_id} declined, amount refunded to profit balance");
-                wsi_notify_user($row->user_id, 'Withdrawal Declined', 'Your withdrawal request was declined and the amount has been refunded to your profit balance.');
-                wsi_audit(get_current_user_id(), 'decline_withdraw', "Declined withdrawal #{$withdraw_id} for user #{$row->user_id}");
-                wp_send_json_success(['message' => 'Withdrawal declined and refunded']);
-            } else {
-                error_log('WSI: Failed to decline withdrawal #' . $withdraw_id . ' - ' . $wpdb->last_error);
-                wp_send_json_error(['message' => 'Failed to decline withdrawal']);
-            }
+            wp_send_json_success(['message' => 'Withdrawal declined and refunded']);
         }
     }
     add_action('wp_ajax_wsi_admin_decline_withdrawal', 'wsi_admin_decline_withdrawal');
@@ -4523,6 +4382,8 @@ function wsi_apply_referral($user_id, $amount, $deposit_id = 0) {
 
             const btn = document.getElementById("wsi_deposit_submit");
             if (!btn) return;
+            // The deposit page owns submission and approval polling.
+            if (btn.closest('form[data-wsi-deposit-page]')) return;
 
             btn.style.display = "block";
 
@@ -4705,32 +4566,13 @@ function wsi_apply_referral($user_id, $amount, $deposit_id = 0) {
 
     function wsi_rest_balance_snapshot($uid) {
         global $wpdb;
-        $assets = wsi_get_main($uid);
-        $profit = wsi_get_profit($uid);
-
-        $t_dep = $wpdb->prefix . 'wsi_deposits';
-        $deposits = $wpdb->get_results(
-            $wpdb->prepare("SELECT amount, created_at, approved_at FROM $t_dep WHERE user_id=%d AND status='approved'", $uid)
-        );
-
-        $now = current_time('timestamp');
-        $unlock_days = wsi_get_deposit_unlock_days();
-        $unlock_seconds = $unlock_days * 24 * 60 * 60;
-        $approved_total = 0;
-        $unlocked_assets = 0;
-        foreach ($deposits as $d) {
-            $amount_dep = floatval($d->amount);
-            $approved_total += $amount_dep;
-            $unlock_date = $d->approved_at ?: $d->created_at;
-            if (($now - strtotime($unlock_date)) >= $unlock_seconds) {
-                $unlocked_assets += $amount_dep;
-            }
+        $balances = wsi_get_withdrawal_balances($uid);
+        if ($balances['balance_error']) {
+            return new WP_Error('wsi_balances_unavailable', 'Balances are temporarily unavailable.', ['status' => 503]);
         }
-
-        // Available balance = profit + unlocked portion of main balance (locked deposits remain locked)
-        $locked_assets = max(0, $approved_total - $unlocked_assets);
-        $unlocked_available = max(0, $assets - $locked_assets);
-        $available = $profit + $unlocked_available;
+        $assets = $balances['total_assets'];
+        $profit = $balances['available_balance'];
+        $available = $balances['available_balance'];
         $net = $assets + $profit;
 
         return [
@@ -4738,11 +4580,33 @@ function wsi_apply_referral($user_id, $amount, $deposit_id = 0) {
             'profit'      => round($profit, 2),
             'available'   => round($available, 2),
             'net'         => round($net, 2),
+            'totalAssetsLocked' => $balances['total_assets_locked'],
+            'totalAssetsWithdrawable' => $balances['total_assets_withdrawable'],
+            'totalAssetsUnlockedAmount' => $balances['total_assets_unlocked_amount'],
+            'totalAssetsLockedAmount' => $balances['total_assets_locked_amount'],
+            'totalAssetsUnlockAt' => $balances['total_assets_unlock_at'],
         ];
     }
 
     add_action('rest_api_init', function () {
         $ns = 'wsi/v1';
+
+        register_rest_route($ns, '/dashboard', [
+            'methods' => WP_REST_Server::READABLE,
+            'permission_callback' => function () { return is_user_logged_in(); },
+            'callback' => function () {
+                $balances = wsi_rest_balance_snapshot(get_current_user_id());
+                if (is_wp_error($balances)) return $balances;
+                $response = new WP_REST_Response(array_merge($balances, [
+                    'assets' => $balances['totalAssets'],
+                    'profit_income' => $balances['profit'],
+                    'available_balance' => $balances['available'],
+                    'net_margin' => $balances['net'],
+                ]));
+                $response->header('Cache-Control', 'no-store');
+                return $response;
+            },
+        ]);
 
         register_rest_route($ns, '/auth/login', [
             'methods'             => WP_REST_Server::CREATABLE,
@@ -5093,4 +4957,3 @@ function wsi_apply_referral($user_id, $amount, $deposit_id = 0) {
             }
         }
     });
-

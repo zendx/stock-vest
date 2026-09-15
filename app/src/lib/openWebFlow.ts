@@ -1,26 +1,17 @@
 import {Alert, Linking} from 'react-native';
 import Constants from 'expo-constants';
-import {apiBaseUrl} from '../api/client';
+import {siteBaseUrl} from '../api/client';
 
 const normalizeBase = () => {
   const envBase = process.env.EXPO_PUBLIC_WEB_BASE_URL || (Constants.expoConfig?.extra as any)?.webBaseUrl;
   if (envBase) return envBase.endsWith('/') ? envBase.slice(0, -1) : envBase;
-  // Fallback to API host if available
-  try {
-    if (apiBaseUrl) {
-      const url = new URL(apiBaseUrl);
-      return `${url.protocol}//${url.host}`;
-    }
-  } catch {
-    // ignore
-  }
-  return '';
+  return siteBaseUrl;
 };
 
 export const openWebFlow = async (path: string, label: string) => {
   const base = normalizeBase();
   if (!base) {
-    Alert.alert(`${label} unavailable`, 'Set EXPO_PUBLIC_WEB_BASE_URL to your WordPress site URL to open this flow.');
+    Alert.alert(`${label} unavailable`, 'The secure website address is not configured.');
     return false;
   }
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;

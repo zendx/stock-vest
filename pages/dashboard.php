@@ -25,41 +25,16 @@ if (file_exists($wsi_asset_path)) {
 // --- USE THE CORRECT FUNCTIONS ---
 
 // Total assets (raw float)
-$assets = wsi_get_main($user_id);
+$balance_snapshot = wsi_get_withdrawal_balances($user_id);
+$assets = $balance_snapshot['total_assets'];
 
 // Profit income
-$profit_income = wsi_get_profit($user_id);
+$profit_income = $balance_snapshot['available_balance'];
 
 // Net margin = assets + profit
 $net_margin = $assets + $profit_income;
 
-// Compute available balance (profit + unlocked deposits)
-global $wpdb;
-$t_dep = $wpdb->prefix . 'wsi_deposits';
-
-$deposits = $wpdb->get_results(
-    $wpdb->prepare("SELECT amount, created_at, approved_at FROM $t_dep WHERE user_id=%d AND status='approved'", $user_id)
-);
-
-$now = current_time('timestamp');
-$unlock_days = function_exists('wsi_get_deposit_unlock_days') ? wsi_get_deposit_unlock_days() : 60;
-$unlock_seconds = $unlock_days * 24 * 60 * 60;
-
-$approved_total = 0;
-$unlocked_assets = 0;
-foreach ($deposits as $d) {
-    $amount = floatval($d->amount);
-    $approved_total += $amount;
-    $unlock_date = $d->approved_at ?: $d->created_at;
-    if (($now - strtotime($unlock_date)) >= $unlock_seconds) {
-        $unlocked_assets += $amount;
-    }
-}
-
-// Available balance = profit + unlocked portion of main balance (locked deposits remain locked)
-$locked_assets = max(0, $approved_total - $unlocked_assets);
-$unlocked_available = max(0, $assets - $locked_assets);
-$available_balance = $profit_income + $unlocked_available;
+$available_balance = $balance_snapshot['available_balance'];
 
 // Format for display
 $assets = number_format($assets, 2);
@@ -94,9 +69,10 @@ $available_balance = number_format($available_balance, 2);
     </style>
 
     <script defer src="<?php echo plugin_dir_url(__FILE__) . 'assets/js/app435e.js?v=' . esc_attr($wsi_asset_ver); ?>"></script><link href="<?php echo plugin_dir_url(__FILE__) . 'assets/css/app435e.css?v=' . esc_attr($wsi_asset_ver); ?>" rel="stylesheet">
+    <link rel="stylesheet" href="<?php echo esc_url(plugin_dir_url(__FILE__) . 'assets/css/ui-polish.css?v=' . filemtime(__DIR__ . '/assets/css/ui-polish.css')); ?>">
 </head>
 
-<body class="main-bg main-bg-opac main-bg-blur adminuiux-sidebar-fill-white adminuiux-sidebar-boxed  theme-blue roundedui" data-theme="theme-blue" data-sidebarfill="adminuiux-sidebar-fill-white" data-bs-spy="scroll" data-bs-target="#list-example" data-bs-smooth-scroll="true" tabindex="0">
+<body class="wsi-ui main-bg main-bg-opac main-bg-blur adminuiux-sidebar-fill-white adminuiux-sidebar-boxed  theme-blue roundedui" data-theme="theme-blue" data-sidebarfill="adminuiux-sidebar-fill-white" data-bs-spy="scroll" data-bs-target="#list-example" data-bs-smooth-scroll="true" tabindex="0">
     <!-- Pageloader -->
     <?php
     include_once plugin_dir_path(__FILE__) . 'assets/inc/header.php';
@@ -127,7 +103,10 @@ $available_balance = number_format($available_balance, 2);
                                                     <div class="avatar avatar-60 bg-white-opacity rounded"><i class="bi bi-wallet h2"></i></div>
                                                 </div>
                                             </div>
-                                            <h1 id="wsi-amt-assets">$<?php echo $assets; ?></h1>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <h1 id="wsi-amt-assets" class="mb-0">$<?php echo $assets; ?></h1>
+                                                <i class="bi <?php echo $balance_snapshot['total_assets_locked'] ? 'bi-lock-fill' : 'bi-unlock-fill'; ?> text-white wsi-total-assets-lock" title="<?php echo esc_attr($balance_snapshot['total_assets_locked'] ? 'Total assets locked' : 'Total assets unlocked'); ?>" aria-label="<?php echo esc_attr($balance_snapshot['total_assets_locked'] ? 'Total assets locked' : 'Total assets unlocked'); ?>"></i>
+                                            </div>
                                             <h5 class="opacity-75 fw-normal mb-1">Total Assets</h5>
                                         </div>
                                     </div>
@@ -180,7 +159,10 @@ $available_balance = number_format($available_balance, 2);
                                                             <div class="avatar avatar-60 bg-theme-1-subtle text-theme-1 rounded"><i class="bi bi-bank h4"></i></div>
                                                         </div>
                                                         <div class="col">
-                                                            <h4 class="fw-medium wsi-amt-assets">$<?php echo $assets; ?></h4>
+                                                            <div class="d-flex align-items-center gap-2">
+                                                                <h4 class="fw-medium wsi-amt-assets mb-0">$<?php echo $assets; ?></h4>
+                                                                <i class="bi <?php echo $balance_snapshot['total_assets_locked'] ? 'bi-lock-fill' : 'bi-unlock-fill'; ?> text-white wsi-total-assets-lock" title="<?php echo esc_attr($balance_snapshot['total_assets_locked'] ? 'Total assets locked' : 'Total assets unlocked'); ?>" aria-label="<?php echo esc_attr($balance_snapshot['total_assets_locked'] ? 'Total assets locked' : 'Total assets unlocked'); ?>"></i>
+                                                            </div>
                                                             <p class="text-secondary">Total Assets <span class="text-success fs-14"></i> </span></p>
                                                         </div>
                                                     </div>
@@ -323,7 +305,9 @@ $available_balance = number_format($available_balance, 2);
                     document.addEventListener('DOMContentLoaded', function() {
                         const apiRoot = "<?php echo esc_url_raw(rest_url('wsi/v1')); ?>";
                         const nonce = "<?php echo esc_attr(wp_create_nonce('wp_rest')); ?>";
+                        function refreshBalances() {
                         fetch(`${apiRoot}/dashboard`, {
+                            cache: 'no-store',
                             headers: { 'X-WP-Nonce': nonce },
                             credentials: 'same-origin'
                         })
@@ -334,8 +318,19 @@ $available_balance = number_format($available_balance, 2);
                             updateText('#wsi-amt-profit', data.profit_income);
                             updateText('#wsi-amt-available', data.available_balance);
                             updateText('#wsi-amt-net', data.net_margin);
+                            document.querySelectorAll('.wsi-total-assets-lock').forEach(function(icon) {
+                                const locked = Boolean(data.totalAssetsLocked);
+                                icon.classList.toggle('bi-lock-fill', locked);
+                                icon.classList.toggle('bi-unlock-fill', !locked);
+                                icon.title = locked ? 'Total assets locked' : 'Total assets unlocked';
+                                icon.setAttribute('aria-label', locked ? 'Total assets locked' : 'Total assets unlocked');
+                            });
                         })
                         .catch(err => console.warn('Dashboard refresh failed', err));
+                        }
+                        refreshBalances();
+                        setInterval(function() { if (!document.hidden) refreshBalances(); }, 30000);
+                        document.addEventListener('visibilitychange', function() { if (!document.hidden) refreshBalances(); });
 
                         function formatCurrency(value) {
                             const num = Number(value || 0);

@@ -1,6 +1,7 @@
 import React, {useMemo, useState} from 'react';
 import {Alert, StyleSheet, TextInput, View, Pressable} from 'react-native';
 import {useMutation} from '@tanstack/react-query';
+import {useRoute} from '@react-navigation/native';
 import {Ionicons} from '@expo/vector-icons';
 import {Screen} from '../components/Screen';
 import {Surface} from '../components/Surface';
@@ -11,14 +12,17 @@ import {useSession} from '../hooks/useSession';
 import {submitReinvest} from '../api/portfolio';
 import {queryClient} from '../lib/queryClient';
 import {useBalances} from '../hooks/useBalances';
+import {showFinancialFlowError} from '../lib/financialFlow';
+import type {MainStackRouteProp} from '../navigation/types';
 
 const formatCurrency = (value: number) =>
   `$${value.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
 
 const ReinvestScreen = () => {
   const theme = useTheme();
+  const route = useRoute<MainStackRouteProp<'Reinvest'>>();
   const {token} = useSession();
-  const [amount, setAmount] = useState('');
+  const [amount, setAmount] = useState(route.params?.amount || '');
   const [note, setNote] = useState('');
   const {data: balances} = useBalances();
 
@@ -31,14 +35,17 @@ const ReinvestScreen = () => {
       queryClient.invalidateQueries({queryKey: ['transactions']});
       Alert.alert('Reinvested', 'Funds reinvested in-app.');
     },
-    onError: (err: any) => {
-      Alert.alert('Reinvest failed', err?.message || 'Unable to reinvest right now.');
-    },
+    onError: (err: unknown) => showFinancialFlowError(err, 'Reinvestment', '/wsi/reinvest/'),
   });
 
   const handleSubmit = () => {
-    if (!amount) {
-      Alert.alert('Add amount', 'Enter the amount to reinvest.');
+    const value = Number(amount.replace(/,/g, ''));
+    if (!Number.isFinite(value) || value <= 0) {
+      Alert.alert('Add a valid amount', 'Reinvestment amount must be greater than zero.');
+      return;
+    }
+    if (value > profit) {
+      Alert.alert('Amount too high', 'Reinvestment amount cannot exceed your available profit.');
       return;
     }
     mutation.mutate({amount: amount.trim(), note: note.trim() || undefined});
@@ -70,7 +77,7 @@ const ReinvestScreen = () => {
           Reinvest Profit
         </Typography>
         <Typography variant="body" style={{color: theme.palette.muted, marginTop: 6}}>
-          Mirror the reinvest flow from WordPress without leaving the app.
+          Choose how much of your available profit to put back to work.
         </Typography>
 
         <View style={{marginTop: 14}}>

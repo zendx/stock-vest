@@ -1,4 +1,4 @@
-import React, {useMemo, useState} from 'react';
+import React, {useCallback, useMemo, useState} from 'react';
 import {FlatList, View, StyleSheet, TextInput} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {Ionicons} from '@expo/vector-icons';
@@ -8,12 +8,16 @@ import {Surface} from '../components/Surface';
 import {PrimaryButton} from '../components/PrimaryButton';
 import {useTheme} from '../theme';
 import {useStocks} from '../hooks/useStocks';
+import type {TabNavigationProp} from '../navigation/types';
 
 const StocksScreen = () => {
   const theme = useTheme();
-  const {data: stocks = [], isLoading, error} = useStocks();
+  const {data: stocks = [], isLoading, error, refetch, isFetching} = useStocks();
   const [query, setQuery] = useState('');
-  const navigation = useNavigation();
+  const navigation = useNavigation<TabNavigationProp<'Stocks'>>();
+  const handleRefresh = useCallback(() => {
+    void refetch();
+  }, [refetch]);
 
   const filtered = useMemo(
     () =>
@@ -26,7 +30,7 @@ const StocksScreen = () => {
   );
 
   return (
-    <Screen scroll={false}>
+    <Screen scroll={false} bottomInset={false}>
       <View style={[styles.hero, {backgroundColor: theme.palette.primary}]}>
         <Typography variant="subtitle" weight="bold" style={{color: '#fff'}}>
           Stocks
@@ -55,11 +59,12 @@ const StocksScreen = () => {
         ListEmptyComponent={() =>
           !isLoading && (
             <Typography variant="body" style={{color: theme.palette.muted}}>
-              {error ? 'Unable to load stocks. Check API configuration.' : 'No stocks available.'}
+              {error ? 'Stocks are temporarily unavailable.' : 'No stocks available.'}
             </Typography>
           )
         }
-        refreshing={isLoading}
+        refreshing={isFetching}
+        onRefresh={handleRefresh}
         renderItem={({item}) => (
           <Surface style={styles.stockCard}>
             <View style={styles.stockRow}>
@@ -84,7 +89,7 @@ const StocksScreen = () => {
                 label="Buy"
                 style={{marginLeft: 10, minWidth: 72}}
                 compact
-                onPress={() => navigation.navigate('BuyStock' as never, {stock: item} as never)}
+                onPress={() => navigation.navigate('BuyStock', {stock: item})}
               />
             </View>
           </Surface>

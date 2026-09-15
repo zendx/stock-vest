@@ -10,7 +10,15 @@ export type Balances = {
   profit: number;
   available: number;
   net: number;
+  totalAssetsLocked: boolean;
+  totalAssetsUnlockedAmount: number;
+  totalAssetsLockedAmount: number;
+  totalAssetsWithdrawable: boolean;
+  totalAssetsUnlockAt: string | null;
 };
+
+export type WithdrawalSource = 'available_balance' | 'total_assets';
+export type WithdrawalRequest = {amount: string; destination: string; withdrawal_source: WithdrawalSource; note?: string};
 
 export type Stock = {
   id: string;

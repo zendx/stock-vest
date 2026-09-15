@@ -8,7 +8,7 @@ export type AuthResponse = {
 
 export const login = (payload: {identifier: string; password: string}) => {
   const {identifier, password} = payload;
-  // Send multiple aliases so the backend can resolve by username or email, matching the WordPress login form.
+  // Keep aliases for compatibility with current and future authentication handlers.
   const body = {
     identifier,
     login: identifier,

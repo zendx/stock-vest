@@ -1,6 +1,6 @@
 import React, {ReactNode, useEffect} from 'react';
-import {ScrollView, StatusBar, StyleSheet, View} from 'react-native';
-import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
+import {KeyboardAvoidingView, Platform, ScrollView, StatusBar, StyleSheet, View} from 'react-native';
+import {SafeAreaView} from 'react-native-safe-area-context';
 import {useTheme} from '../theme';
 import {useSession} from '../hooks/useSession';
 
@@ -21,7 +21,6 @@ export const Screen = ({
 }: ScreenProps) => {
   const theme = useTheme();
   const {isAuthenticated, hydrated, status, token, logout} = useSession();
-  const insets = useSafeAreaInsets();
   const gating = requireAuth;
 
   useEffect(() => {
@@ -41,7 +40,6 @@ export const Screen = ({
         styles.container,
         {backgroundColor: theme.palette.background},
         padded && {paddingHorizontal: theme.spacing[5]},
-        {paddingTop: Math.max(insets.top, 12)},
         bottomInset && {paddingBottom: theme.spacing[6]},
       ]}
     >
@@ -50,14 +48,42 @@ export const Screen = ({
   );
 
   return (
-    <SafeAreaView style={{flex: 1, backgroundColor: theme.palette.background}} edges={['top', 'left', 'right', 'bottom']}>
-      <StatusBar barStyle="dark-content" backgroundColor={theme.palette.background} translucent={false} />
-      {scroll ? <ScrollView showsVerticalScrollIndicator={false}>{content}</ScrollView> : content}
+    <SafeAreaView
+      style={[styles.safeArea, {backgroundColor: theme.palette.background}]}
+      edges={bottomInset ? ['top', 'left', 'right', 'bottom'] : ['top', 'left', 'right']}
+    >
+      <StatusBar
+        barStyle={theme.mode === 'dark' ? 'light-content' : 'dark-content'}
+        backgroundColor={theme.palette.background}
+        translucent={false}
+      />
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoidingView}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        {scroll ? (
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+            keyboardShouldPersistTaps="handled"
+          >
+            {content}
+          </ScrollView>
+        ) : (
+          content
+        )}
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+  },
+  keyboardAvoidingView: {
+    flex: 1,
+  },
   container: {
     flexGrow: 1,
     paddingTop: 12,

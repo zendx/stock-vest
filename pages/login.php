@@ -43,9 +43,10 @@ if (is_user_logged_in()) {
 
     <script defer src="<?php echo plugin_dir_url(__FILE__) . 'assets/js/app435e.js?v=' . esc_attr($wsi_asset_ver); ?>"></script>
     <link href="<?php echo plugin_dir_url(__FILE__) . 'assets/css/app435e.css?v=' . esc_attr($wsi_asset_ver); ?>" rel="stylesheet">
+    <link rel="stylesheet" href="<?php echo esc_url(plugin_dir_url(__FILE__) . 'assets/css/ui-polish.css?v=' . filemtime(__DIR__ . '/assets/css/ui-polish.css')); ?>">
 </head>
 
-<body class="main-bg main-bg-opac main-bg-blur adminuiux-sidebar-fill-white adminuiux-sidebar-boxed theme-blue roundedui">
+<body class="wsi-ui main-bg main-bg-opac main-bg-blur adminuiux-sidebar-fill-white adminuiux-sidebar-boxed theme-blue roundedui">
 
     <main class="flex-shrink-0 pt-0 h-100">
         <div class="container-fluid">
@@ -86,13 +87,13 @@ if (is_user_logged_in()) {
                                     <form method="post" action="<?php echo esc_url( wp_login_url() ); ?>" >
 
                                         <div class="form-floating mb-3">
-                                            <input type="text" class="form-control" name="log" id="emailadd" placeholder="Email or Username" required>
-                                            <label for="emailadd">Email Address</label>
+                                            <input type="text" class="form-control" name="log" autocomplete="username" id="emailadd" placeholder="Email or Username" required>
+                                            <label for="emailadd">Email or Username</label>
                                         </div>
 
                                         <div class="position-relative">
                                             <div class="form-floating mb-3">
-                                                <input type="password" class="form-control" name="pwd" id="passwd" placeholder="Enter your password" required>
+                                                <input type="password" class="form-control" name="pwd" autocomplete="current-password" id="passwd" placeholder="Enter your password" required>
                                                 <label for="passwd">Password</label>
                                             </div>
                                             <button type="button" id="toggle-password" class="btn btn-square btn-link text-theme-1 position-absolute end-0 top-0 mt-2 me-2" aria-label="Show password">

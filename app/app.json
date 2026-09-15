@@ -2,25 +2,18 @@
   "expo": {
     "name": "COFCO Capital",
     "slug": "cofco-capital",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "orientation": "portrait",
     "scheme": "cofcocapital",
-    "icon": "./assets/icon.png",
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#1F8D45"
-    },
+    "icon": "./assets/icon-ios.png",
+    "userInterfaceStyle": "automatic",
     "androidStatusBar": {
-      "backgroundColor": "#1F8D45",
+      "backgroundColor": "#052C5A",
       "barStyle": "light-content",
       "translucent": false
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.cofco.capital",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
@@ -34,13 +27,31 @@
       "package": "com.cofco.capital"
     },
     "web": {
-      "favicon": "./assets/icon.png"
+      "favicon": "./assets/icon-ios.png"
     },
     "extra": {
       "apiBaseUrl": "https://cofco.capital/sv/wp-json/wsi/v1",
+      "webBaseUrl": "https://cofco.capital/sv",
+      "nativeWritesEnabled": false,
       "eas": {
         "projectId": "71b82d66-6eca-4a3f-a98e-8c806b30313b"
       }
-    }
+    },
+    "plugins": [
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-ios.png",
+          "imageWidth": 500,
+          "resizeMode": "contain",
+          "backgroundColor": "#052C5A",
+          "dark": {
+            "image": "./assets/splash-ios.png",
+            "backgroundColor": "#052C5A"
+          }
+        }
+      ]
+    ]
   }
 }

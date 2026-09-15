@@ -1,5 +1,5 @@
 import React, {useEffect, useMemo, useState} from 'react';
-import {Alert, ScrollView, StyleSheet, TextInput, View, Switch} from 'react-native';
+import {Alert, StyleSheet, TextInput, View, Switch} from 'react-native';
 import {Ionicons} from '@expo/vector-icons';
 import {Screen} from '../components/Screen';
 import {Surface} from '../components/Surface';
@@ -92,13 +92,13 @@ const UserSettingsScreen = () => {
         </Typography>
       </View>
 
-      <ScrollView contentContainerStyle={{paddingBottom: 20}}>
+      <View style={{paddingBottom: 20}}>
         <Surface style={{padding: 14, marginBottom: 12}}>
           <Typography variant="subtitle" weight="medium">
             Profile Details
           </Typography>
           <Typography variant="caption" style={{color: theme.palette.muted, marginTop: 6}}>
-            Mirrors user-settings.php inside the app. Saved via the WordPress REST bridge.
+            Keep your contact and address information up to date.
           </Typography>
         </Surface>
 
@@ -175,14 +175,14 @@ const UserSettingsScreen = () => {
               <View>
                 <Typography weight="medium">Secure and synced</Typography>
                 <Typography variant="caption" style={{color: theme.palette.muted}}>
-                  Updates persist via REST, matching the WordPress profile form.
+                  Changes are saved securely to your COFCO Capital account.
                 </Typography>
               </View>
             </View>
             <Ionicons name="chevron-forward" size={18} color={theme.palette.muted} />
           </View>
         </Surface>
-      </ScrollView>
+      </View>
     </Screen>
   );
 };

@@ -11,44 +11,38 @@ import {useTheme} from '../theme';
 import {submitBuyStock} from '../api/portfolio';
 import {useSession} from '../hooks/useSession';
 import {queryClient} from '../lib/queryClient';
-
-type StockParam = {
-  stock?: {
-    id: string;
-    name: string;
-    price: string;
-    rate: string;
-    status: string;
-  };
-};
+import type {MainStackRouteProp} from '../navigation/types';
+import {showFinancialFlowError} from '../lib/financialFlow';
 
 const BuyStockScreen = () => {
   const theme = useTheme();
-  const route = useRoute();
-  const {stock} = (route.params as StockParam) || {};
+  const route = useRoute<MainStackRouteProp<'BuyStock'>>();
+  const {stock} = route.params;
   const [amount, setAmount] = useState('');
   const [units, setUnits] = useState('');
   const {token} = useSession();
 
   const mutation = useMutation({
-    mutationFn: (payload: {stockId?: string; units?: string; amount?: string}) => submitBuyStock(payload, token),
+    mutationFn: (payload: {stockId: string; units?: string; amount?: string}) => submitBuyStock(payload, token),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ['balances']});
       queryClient.invalidateQueries({queryKey: ['transactions']});
       Alert.alert('Order placed', 'Your buy order is captured inside the app.');
     },
-    onError: (err: any) => {
-      Alert.alert('Order failed', err?.message || 'Unable to place order right now.');
-    },
+    onError: (err: unknown) => showFinancialFlowError(err, 'Stock order', '/wsi/stocks/'),
   });
 
   const handleSubmit = () => {
-    if (!amount && !units) {
-      Alert.alert('Add order details', 'Specify an amount or units to continue.');
+    const numericAmount = amount ? Number(amount.replace(/,/g, '')) : undefined;
+    const numericUnits = units ? Number(units.replace(/,/g, '')) : undefined;
+    const validAmount = numericAmount !== undefined && Number.isFinite(numericAmount) && numericAmount > 0;
+    const validUnits = numericUnits !== undefined && Number.isFinite(numericUnits) && numericUnits > 0;
+    if (!validAmount && !validUnits) {
+      Alert.alert('Add valid order details', 'Specify an amount or number of units greater than zero.');
       return;
     }
     mutation.mutate({
-      stockId: stock?.id,
+      stockId: stock.id,
       units: units.trim() || undefined,
       amount: amount.trim() || undefined,
     });
@@ -63,10 +57,10 @@ const BuyStockScreen = () => {
     <Screen>
       <View style={[styles.hero, {backgroundColor: theme.palette.primary}]}>
         <Typography variant="subtitle" weight="bold" style={{color: '#fff'}}>
-          {stock?.name || 'Buy Stock'}
+          {stock.name}
         </Typography>
         <Typography variant="caption" style={{color: '#E7F6ED', marginTop: 6}}>
-          {stock ? `${stock.price} · ${stock.status}` : 'Place a buy order without leaving the app.'}
+          {`${stock.price} · ${stock.status}`}
         </Typography>
       </View>
 
@@ -75,7 +69,7 @@ const BuyStockScreen = () => {
           Order Details
         </Typography>
         <Typography variant="caption" style={{color: theme.palette.muted, marginTop: 6}}>
-          Connects to the WordPress buy stock flow.
+          Review the investment amount or units before continuing.
         </Typography>
 
         <View style={{gap: 12, marginTop: 14}}>
@@ -119,7 +113,7 @@ const BuyStockScreen = () => {
           <View style={{flex: 1}}>
             <Typography weight="medium">Holdings sync</Typography>
             <Typography variant="caption" style={{color: theme.palette.muted, marginTop: 4}}>
-              Orders reflect in holdings and activity, matching stocks.php.
+              Completed orders appear in Holdings and Activity.
             </Typography>
           </View>
         </View>

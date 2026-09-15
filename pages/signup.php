@@ -63,9 +63,10 @@ if (file_exists($wsi_asset_path)) {
     <!-- CSS + JS -->
     <link href="<?php echo $PLUGIN_ASSETS; ?>css/app435e.css?v=<?php echo esc_attr($wsi_asset_ver); ?>" rel="stylesheet">
     <script defer src="<?php echo $PLUGIN_ASSETS; ?>js/app435e.js?v=<?php echo esc_attr($wsi_asset_ver); ?>"></script>
+    <link rel="stylesheet" href="<?php echo esc_url(plugin_dir_url(__FILE__) . 'assets/css/ui-polish.css?v=' . filemtime(__DIR__ . '/assets/css/ui-polish.css')); ?>">
 </head>
 
-<body class="main-bg main-bg-opac main-bg-blur adminuiux-sidebar-fill-white adminuiux-sidebar-boxed theme-blue roundedui"
+<body class="wsi-ui main-bg main-bg-opac main-bg-blur adminuiux-sidebar-fill-white adminuiux-sidebar-boxed theme-blue roundedui"
       data-theme="theme-blue"
       data-sidebarfill="adminuiux-sidebar-fill-white"
       data-bs-spy="scroll"
@@ -120,25 +121,25 @@ if (file_exists($wsi_asset_path)) {
                                         <div class="row">
                                             <div class="col">
                                                 <div class="form-floating mb-3">
-                                                    <input type="text" name="first_name" class="form-control" id="namef" required>
+                                                    <input type="text" name="first_name" autocomplete="given-name" class="form-control" id="namef" required placeholder=" ">
                                                     <label for="namef">First Name</label>
                                                 </div>
                                             </div>
                                             <div class="col">
                                                 <div class="form-floating mb-3">
-                                                    <input type="text" name="last_name" class="form-control" id="namel" required>
+                                                    <input type="text" name="last_name" autocomplete="family-name" class="form-control" id="namel" required placeholder=" ">
                                                     <label for="namel">Last Name</label>
                                                 </div>
                                             </div>
                                         </div>
 
                                         <div class="form-floating mb-3">
-                                            <input type="text" name="username" class="form-control" id="username" required>
+                                            <input type="text" name="username" autocomplete="username" class="form-control" id="username" pattern="\S+" title="Username must not contain spaces." required placeholder=" ">
                                             <label for="username">Username</label>
                                         </div>
 
                                         <div class="form-floating mb-3">
-                                            <input type="email" name="email" class="form-control" id="emailadd" required>
+                                            <input type="email" name="email" autocomplete="email" class="form-control" id="emailadd" required placeholder=" ">
                                             <label for="emailadd">Email Address</label>
                                         </div>
 
@@ -372,21 +373,21 @@ if (file_exists($wsi_asset_path)) {
                                             </div>
 
                                             <div class="form-floating">
-                                                <input type="text" name="phone" class="form-control" id="phonen" required>
+                                                <input type="tel" inputmode="tel" name="phone" autocomplete="tel-national" class="form-control" id="phonen" required placeholder=" ">
                                                 <label for="phonen">Phone Number</label>
                                             </div>
                                         </div>
 
                                         <div class="position-relative">
                                             <div class="form-floating mb-3">
-                                                <input type="password" name="password" class="form-control" id="checkstrength" required>
+                                                <input type="password" name="password" autocomplete="new-password" class="form-control" id="checkstrength" required placeholder=" ">
                                                 <label for="checkstrength">Password</label>
                                             </div>
                                         </div>
 
                                         <div class="position-relative">
                                             <div class="form-floating mb-3">
-                                                <input type="password" name="confirm" class="form-control" id="passwd" required>
+                                                <input type="password" name="confirm" autocomplete="new-password" class="form-control" id="passwd" required placeholder=" ">
                                                 <label for="passwd">Confirm Password</label>
                                             </div>
                                         </div>

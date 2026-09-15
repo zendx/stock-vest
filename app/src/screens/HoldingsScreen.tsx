@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useCallback} from 'react';
 import {FlatList, Image, StyleSheet, View} from 'react-native';
 import {Ionicons} from '@expo/vector-icons';
 import {Screen} from '../components/Screen';
@@ -9,7 +9,11 @@ import {useHoldings} from '../hooks/useHoldings';
 
 const HoldingsScreen = () => {
   const theme = useTheme();
-  const {data: holdings = [], isLoading, error} = useHoldings();
+  const {data: holdings = [], isLoading, error, refetch, isFetching} = useHoldings();
+
+  const handleRefresh = useCallback(() => {
+    void refetch();
+  }, [refetch]);
 
   const renderHolding = ({item}: any) => (
     <Surface style={styles.card}>
@@ -48,19 +52,20 @@ const HoldingsScreen = () => {
   );
 
   return (
-    <Screen>
+    <Screen scroll={false} bottomInset={false}>
       <View style={[styles.hero, {backgroundColor: theme.palette.primary}]}>
         <Typography variant="subtitle" weight="bold" style={{color: '#fff'}}>
           Holdings
         </Typography>
         <Typography variant="caption" style={{color: '#E7F6ED', marginTop: 6}}>
-          Mirrors holdings.php with invested, shares, profit, and rate.
+          Track invested value, shares, profit, and current rates.
         </Typography>
       </View>
       <Typography variant="caption" style={{color: theme.palette.muted, marginBottom: 12}}>
-        Pulled from the WordPress holdings table.
+        Your current and historical investments.
       </Typography>
       <FlatList
+        style={styles.list}
         data={holdings}
         keyExtractor={(item) => item.id}
         renderItem={renderHolding}
@@ -74,7 +79,8 @@ const HoldingsScreen = () => {
             </Surface>
           )
         }
-        refreshing={isLoading}
+        refreshing={isFetching}
+        onRefresh={handleRefresh}
       />
       <Surface muted style={{marginTop: 12}}>
         <View style={{flexDirection: 'row', alignItems: 'center', gap: 10}}>
@@ -84,7 +90,7 @@ const HoldingsScreen = () => {
           <View style={{flex: 1}}>
             <Typography weight="medium">Portfolio snapshot</Typography>
             <Typography variant="caption" style={{color: theme.palette.muted, marginTop: 4}}>
-              Data stays in sync with holdings.php and WordPress tables.
+              Holdings stay in sync with your COFCO Capital account.
             </Typography>
           </View>
         </View>
@@ -94,6 +100,9 @@ const HoldingsScreen = () => {
 };
 
 const styles = StyleSheet.create({
+  list: {
+    flex: 1,
+  },
   hero: {
     padding: 16,
     borderRadius: 18,

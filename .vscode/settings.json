@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^php -l \"stock-vest\\.php\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

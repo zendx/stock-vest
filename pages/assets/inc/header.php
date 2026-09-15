@@ -40,10 +40,8 @@ if (!function_exists('wsi_get_user_initials')) {
 }
 
 $user_initials = wsi_get_user_initials($full_name);
-$assets = wsi_get_main($user_id);
-if (empty($assets)) {
-    $assets = 0;
-}
+$header_balances = wsi_get_withdrawal_balances($user_id);
+$header_assets = $header_balances['total_assets'];
 ?>
 
 <!-- Page Loader -->
@@ -158,7 +156,8 @@ if (empty($assets)) {
                                     </p>
                                     <p>
                                         <i class="bi bi-wallet2 me-2"></i>
-                                        $<?php echo number_format((float)$assets, 2); ?>
+                                        $<?php echo number_format($header_assets, 2); ?>
+                                        <i class="bi <?php echo $header_balances['total_assets_locked'] ? 'bi-lock-fill' : 'bi-unlock-fill'; ?> wsi-total-assets-lock" aria-label="<?php echo esc_attr($header_balances['total_assets_locked'] ? 'Total assets locked' : 'Total assets unlocked'); ?>"></i>
                                         <small class="opacity-50">Total Assets</small>
                                     </p>
                                 </div>

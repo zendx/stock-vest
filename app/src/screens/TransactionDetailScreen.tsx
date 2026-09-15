@@ -1,25 +1,17 @@
 import React from 'react';
-import {RouteProp, useRoute} from '@react-navigation/native';
+import {useRoute} from '@react-navigation/native';
 import {View, StyleSheet} from 'react-native';
 import {Ionicons} from '@expo/vector-icons';
 import {Screen} from '../components/Screen';
 import {Surface} from '../components/Surface';
 import {Typography} from '../components/Typography';
 import {useTheme} from '../theme';
-import {Transaction} from '../types';
-
-type ParamList = {
-  TransactionDetail: {
-    tx: Transaction;
-  };
-};
+import type {MainStackRouteProp} from '../navigation/types';
 
 const TransactionDetailScreen = () => {
   const theme = useTheme();
-  const route = useRoute<RouteProp<ParamList, 'TransactionDetail'>>();
-  const tx = route.params?.tx;
-
-  if (!tx) return null;
+  const route = useRoute<MainStackRouteProp<'TransactionDetail'>>();
+  const {tx} = route.params;
 
   const rows = [
     {label: 'Description', value: tx.note || tx.title || '—'},
@@ -35,7 +27,7 @@ const TransactionDetailScreen = () => {
           Transaction
         </Typography>
         <Typography variant="caption" style={{color: '#E7F6ED', marginTop: 6}}>
-          Full details from your WordPress ledger.
+          Full details for this account activity.
         </Typography>
       </View>
 
@@ -63,7 +55,7 @@ const TransactionDetailScreen = () => {
           <View style={{flex: 1}}>
             <Typography weight="medium">History</Typography>
             <Typography variant="caption" style={{color: theme.palette.muted, marginTop: 4}}>
-              Tap transactions in Activity to view details like on transactions.php.
+              Open any item in Activity to review its full details.
             </Typography>
           </View>
         </View>
