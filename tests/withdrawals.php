@@ -127,6 +127,7 @@ for ($i = 0; $i < count($tokens); $i++) {
     eval($code);
 }
 require dirname(__DIR__) . '/includes/withdrawals.php';
+require dirname(__DIR__) . '/includes/reinvest.php';
 require dirname(__DIR__) . '/includes/deposits.php';
 
 $dsn = getenv('WSI_TEST_DSN') ?: 'mysql:host=127.0.0.1;port=3306;charset=utf8mb4';
@@ -170,7 +171,7 @@ try {
     $pdo->exec('INSERT INTO wp_users VALUES (1)');
     $pdo->exec('CREATE TABLE wp_usermeta (umeta_id bigint AUTO_INCREMENT PRIMARY KEY, user_id bigint, meta_key varchar(100), meta_value varchar(100), KEY(user_id)) ENGINE=InnoDB');
     $pdo->exec('CREATE TABLE wp_wsi_holdings (id bigint PRIMARY KEY, user_id bigint, accumulated_profit decimal(14,2), status varchar(32), created_at datetime, KEY(user_id)) ENGINE=InnoDB');
-    $pdo->exec('CREATE TABLE wp_wsi_deposits (id bigint AUTO_INCREMENT PRIMARY KEY, user_id bigint, amount decimal(14,2), created_at datetime, approved_at datetime NULL, status varchar(32)) ENGINE=InnoDB');
+    $pdo->exec('CREATE TABLE wp_wsi_deposits (id bigint AUTO_INCREMENT PRIMARY KEY, user_id bigint, amount decimal(14,2), amount_local decimal(14,2), payment_type varchar(20), crypto_wallet varchar(255), created_at datetime, approved_at datetime NULL, status varchar(32)) ENGINE=InnoDB');
     $pdo->exec("CREATE TABLE wp_wsi_withdrawals (id bigint AUTO_INCREMENT PRIMARY KEY, user_id bigint, amount decimal(14,2), source varchar(32) NOT NULL DEFAULT 'available_balance', method varchar(80), account_details text, status varchar(32), admin_note text, created_at datetime) ENGINE=InnoDB");
 
     reset_fixture();
@@ -322,6 +323,74 @@ try {
     catch (TestJsonResponse $response) {
         check(!$response->success && unchanged(1000, 140), 'AJAX rejects incomplete bank details without deducting funds');
     }
+    reset_fixture();
+    deposit(time() - 61 * DAY_IN_SECONDS);
+    $reinvest = wsi_create_reinvestment(1, '1150.00');
+    $balances = wsi_get_withdrawal_balances(1);
+    check(!is_wp_error($reinvest) && unchanged(1150, 0), 'Full reinvestment combines principal and all profits without doubling principal');
+    check($balances['total_assets_locked'] && $balances['total_assets_locked_amount'] === 1150.0 && $balances['total_assets_unlocked_amount'] === 0.0, 'Entire reinvestment is locked immediately');
+    check(abs(strtotime($balances['total_assets_unlock_at']) - (time() + 60 * DAY_IN_SECONDS)) <= 1, 'Reinvestment starts a fresh configured lock period');
+    check(is_wp_error(request_money('0.01', 'total_assets')) && is_wp_error(request_money('0.01', 'available_balance')), 'Reinvested money cannot be withdrawn from either balance');
+    check(is_wp_error(wsi_create_reinvestment(1, '1150.00')) && unchanged(1150, 0), 'Duplicate reinvestment submission cannot reuse locked principal');
+    $matured = wp_date('Y-m-d H:i:s', time() - 60 * DAY_IN_SECONDS);
+    $wpdb->update('wp_wsi_deposits', ['approved_at' => $matured], ['id' => $reinvest['deposit_id']]);
+    check(wsi_get_withdrawal_balances(1)['total_assets_unlocked_amount'] === 1150.0, 'Full reinvestment unlocks at its deadline');
+
+    reset_fixture(2000);
+    deposit(time() - 61 * DAY_IN_SECONDS);
+    deposit(time() - DAY_IN_SECONDS);
+    $existing_id = $wpdb->insert_id;
+    $existing_date = $wpdb->get_var('SELECT approved_at FROM wp_wsi_deposits WHERE id=' . $existing_id);
+    check(!is_wp_error(wsi_create_reinvestment(1, '1150.00')) && unchanged(2150, 0), 'Mixed balances reinvest only matured principal plus earnings');
+    $balances = wsi_get_withdrawal_balances(1);
+    check($balances['total_assets_locked_amount'] === 2150.0 && $balances['total_assets_unlocked_amount'] === 0.0 && $wpdb->get_var('SELECT approved_at FROM wp_wsi_deposits WHERE id=' . $existing_id) === $existing_date, 'Existing locked deposits keep their original unlock date');
+
+    reset_fixture();
+    deposit(time() - 61 * DAY_IN_SECONDS);
+    request_money('400.00', 'total_assets');
+    check(!is_wp_error(wsi_create_reinvestment(1, '750.00')) && unchanged(750, 0), 'Previously withdrawn principal is excluded from reinvestment');
+    reset_fixture(1000, 0, 0);
+    deposit(time() - 61 * DAY_IN_SECONDS);
+    check(!is_wp_error(wsi_create_reinvestment(1, '1000.00')) && unchanged(1000, 0) && wsi_get_withdrawal_balances(1)['total_assets_locked'], 'Principal-only reinvestment relocks assets without increasing their value');
+    reset_fixture();
+    deposit(time() - DAY_IN_SECONDS);
+    check(!is_wp_error(wsi_create_reinvestment(1, '150.00')) && unchanged(1150, 0), 'Available earnings can be reinvested while original principal is locked');
+
+    reset_fixture();
+    deposit(time() - 61 * DAY_IN_SECONDS);
+    foreach (['1150.01', '0', '-1', '1e3', '1150.001', [], '1150x'] as $amount) {
+        check(is_wp_error(wsi_create_reinvestment(1, $amount)) && unchanged(1000, 150), 'Excessive or malformed reinvestment rejected: ' . json_encode($amount));
+    }
+    foreach (['SELECT amount, created_at, approved_at', 'UPDATE wp_wsi_holdings', 'INSERT INTO wp_wsi_deposits'] as $failure) {
+        $wpdb->fail = $failure;
+        check(is_wp_error(wsi_create_reinvestment(1, '1150.00')) && unchanged(1000, 150) && (int) $wpdb->get_var('SELECT COUNT(*) FROM wp_wsi_deposits') === 1, 'Failed reinvestment rolls back earnings, assets and deposit: ' . $failure);
+    }
+    foreach ([['50.00', 1050, 100, 1000], ['115.00', 1115, 35, 1000], ['575.00', 1150, 0, 575]] as [$amount, $assets, $earnings, $unlocked]) {
+        reset_fixture();
+        deposit(time() - 61 * DAY_IN_SECONDS);
+        $reinvest = wsi_create_reinvestment(1, $amount);
+        $balances = wsi_get_withdrawal_balances(1);
+        check(!is_wp_error($reinvest) && (float) $reinvest['amount'] === (float) $amount && unchanged($assets, $earnings), 'Partial reinvestment uses earnings first and preserves remaining balances: ' . $amount);
+        check($balances['total_assets_locked_amount'] === (float) $amount && $balances['total_assets_unlocked_amount'] === (float) $unlocked, 'Only the selected amount is locked: ' . $amount);
+        check(!is_wp_error(request_money((string) $unlocked, 'total_assets')), 'Unselected principal remains withdrawable: ' . $amount);
+    }
+    reset_fixture(1000, 0, 0);
+    deposit(time() - 61 * DAY_IN_SECONDS);
+    check(!is_wp_error(wsi_create_reinvestment(1, '100.00')) && unchanged(1000, 0) && wsi_get_withdrawal_balances(1)['total_assets_unlocked_amount'] === 900.0, 'Partial principal-only reinvestment does not inflate Total Assets');
+    check(is_wp_error(wsi_create_reinvestment(1, '900.01')) && unchanged(1000, 0), 'Previously reinvested principal cannot be reused');
+    reset_fixture();
+    deposit(time() - 61 * DAY_IN_SECONDS);
+    $wpdb->fail = 'INSERT INTO wp_wsi_deposits';
+    check(is_wp_error(wsi_create_reinvestment(1, '575.00')) && unchanged(1000, 150) && wsi_get_withdrawal_balances(1)['total_assets_unlocked_amount'] === 1000.0, 'Failed partial reinvestment rolls back debits and locks');
+    reset_fixture(0, 0.03, 0.02);
+    check(!is_wp_error(wsi_create_reinvestment(1, '0.05')) && unchanged(0.05, 0), 'Cent-level reinvestment consumes both profit sources exactly');
+    reset_fixture();
+    deposit(time() - 61 * DAY_IN_SECONDS);
+    $GLOBALS['unlock_days'] = 7;
+    wsi_create_reinvestment(1, '1150.00');
+    check(abs(strtotime(wsi_get_withdrawal_balances(1)['total_assets_unlock_at']) - (time() + 7 * DAY_IN_SECONDS)) <= 1, 'Reinvestment uses the configured lock duration');
+    $GLOBALS['unlock_days'] = 0;
+    check(wsi_get_withdrawal_balances(1)['total_assets_unlocked_amount'] === 1150.0, 'Zero-day configuration also applies to reinvestment');
     echo "All $count checks passed.\n";
 } finally {
     if ($pdo->inTransaction()) $pdo->rollBack();

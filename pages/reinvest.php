@@ -20,10 +20,11 @@ if (file_exists($wsi_asset_path)) {
     $wsi_asset_ver .= '-' . filemtime($wsi_asset_path);
 }
 
-// Current user and total profit (stored profit + accumulated holdings)
+// Use the same remaining principal and earnings balances as withdrawals.
 $user_id = get_current_user_id();
-$profit_balance_raw = floatval(wsi_get_profit($user_id));
-$profit_balance = number_format($profit_balance_raw, 2);
+$balances = wsi_get_withdrawal_balances($user_id);
+$reinvest_total = round($balances['total_assets_unlocked_amount'] + $balances['available_balance'], 2);
+$reinvest_disabled = $balances['balance_error'] || $reinvest_total <= 0;
 
 ?>
 <!DOCTYPE html>
@@ -36,7 +37,7 @@ $profit_balance = number_format($profit_balance_raw, 2);
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta http-equiv="x-ua-compatible" content="ie=edge">
 
-    <title>COFCO CAPITAL | Reinvest Profit</title>
+    <title>COFCO CAPITAL | Reinvest</title>
     <link rel="icon" type="image/png" href="<?php echo $PLUGIN_ASSETS; ?>img/favicon.png">
 
     <!-- Fonts -->
@@ -92,35 +93,36 @@ $profit_balance = number_format($profit_balance_raw, 2);
                                         <div class="col-12 col-lg-8 mb-4">
                                             <div class="card adminuiux-card mb-4">
                                                 <div class="card-header">
-                                                    <h5>Reinvest Profit</h5>
-                                                    <p class="text-secondary mb-0">Move profit balance into your main balance to keep it working for you.</p>
+                                                    <h5>Reinvest</h5>
+                                                    <p class="text-secondary mb-0">Choose how much you want to reinvest.</p>
                                                 </div>
                                                 <div class="card-body">
                                                     <div class="row mb-4">
                                                         <div class="col">
-                                                            <p class="text-secondary small mb-1">Available Profit Balance</p>
-                                                            <h1 class="mb-0" id="profit-balance" data-profit="<?php echo esc_attr($profit_balance_raw); ?>">$<?php echo $profit_balance; ?></h1>
+                                                            <p class="text-secondary small mb-1">Total Available Balance to Reinvest</p>
+                                                            <h1 class="mb-0" id="reinvest-balance">$<?php echo number_format($reinvest_total, 2); ?></h1>
                                                         </div>
                                                     </div>
 
-                                                    <div class="row mb-4">
-                                                        <div class="col">
-                                                            <div class="btn-group" role="group" aria-label="Reinvest quick amounts">
-                                                                <button type="button" class="btn btn-outline-theme" data-reinvest-percent="25">25%</button>
-                                                                <button type="button" class="btn btn-outline-theme" data-reinvest-percent="50">50%</button>
-                                                                <button type="button" class="btn btn-outline-theme" data-reinvest-percent="100">100%</button>
-                                                            </div>
-                                                        </div>
-                                                    </div>
+                                                    <?php if ($balances['balance_error']): ?>
+                                                        <p class="text-danger" role="alert">Balances are temporarily unavailable. Please refresh this page before reinvesting.</p>
+                                                    <?php elseif ($reinvest_total <= 0): ?>
+                                                        <p class="text-secondary">You have no unlocked deposits or Available Balance to reinvest yet.</p>
+                                                    <?php endif; ?>
 
-                                                    <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" id="wsi-reinvest-form">
+                                                    <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" id="wsi-reinvest-form" data-reinvest-form>
                                                         <input type="hidden" name="action" value="wsi_submit_reinvest">
                                                         <?php wp_nonce_field('wsi_reinvest_nonce'); ?>
 
+                                                        <div class="btn-group mb-3" role="group" aria-label="Reinvest percentage">
+                                                            <?php foreach ([10, 50, 100] as $percent): ?>
+                                                                <button type="button" class="btn btn-outline-theme" data-reinvest-percent="<?php echo $percent; ?>" <?php disabled($reinvest_disabled); ?>><?php echo $percent; ?>%</button>
+                                                            <?php endforeach; ?>
+                                                        </div>
                                                         <div class="row mb-3">
-                                                            <div class="col-12 col-md-6 col-xl-4">
+                                                            <div class="col-12 col-md-6">
                                                                 <div class="form-floating">
-                                                                    <input name="amount" type="number" step="0.01" min="0" class="form-control" id="reinvest_amount" placeholder="Amount" required>
+                                                                    <input name="amount" type="number" step="0.01" min="0.01" max="<?php echo esc_attr(number_format($reinvest_total, 2, '.', '')); ?>" class="form-control" id="reinvest_amount" placeholder="Amount" required <?php disabled($reinvest_disabled); ?>>
                                                                     <label for="reinvest_amount">Amount ($)</label>
                                                                 </div>
                                                             </div>
@@ -128,10 +130,10 @@ $profit_balance = number_format($profit_balance_raw, 2);
 
                                                         <div class="row align-items-center">
                                                             <div class="col">
-                                                                <p class="text-secondary small mb-0">Reinvesting shifts funds from profit balance into your main balance.</p>
+                                                                <p class="text-secondary small mb-0">Reinvest your unlocked deposits and available balance to keep earning.</p>
                                                             </div>
                                                             <div class="col-auto">
-                                                                <button class="btn btn-theme" type="submit">Reinvest</button>
+                                                                <button class="btn btn-theme" type="submit" <?php disabled($reinvest_disabled); ?>>Reinvest Now</button>
                                                             </div>
                                                         </div>
                                                     </form>
@@ -150,8 +152,8 @@ $profit_balance = number_format($profit_balance_raw, 2);
                                                         <i class="bi bi-arrow-repeat h4"></i>
                                                     </div>
                                                     <h2>Keep Earnings Working</h2>
-                                                    <h4 class="fw-medium">Roll profits back into your portfolio</h4>
-                                                    <p class="mb-4">Use reinvest to grow your main balance without adding new deposits.</p>
+                                                    <h4 class="fw-medium">Start a new investment period</h4>
+                                                    <p class="mb-4">Put your chosen amount back to work and keep earning.</p>
                                                 </div>
                                             </div>
                                         </div>
@@ -170,30 +172,7 @@ $profit_balance = number_format($profit_balance_raw, 2);
             include_once plugin_dir_path(__FILE__) . 'assets/inc/footer.php';
             ?>
 
-            <script>
-            document.addEventListener('DOMContentLoaded', function() {
-                const form = document.getElementById('wsi-reinvest-form');
-                const quickButtons = document.querySelectorAll('[data-reinvest-percent]');
-                const amountInput = document.getElementById('reinvest_amount');
-                const profitEl = document.getElementById('profit-balance');
 
-                if (!form) return;
-
-                form.addEventListener('submit', function(e) {
-                    // Let the form post normally; this hook is here if we later need to add client checks.
-                });
-
-                quickButtons.forEach(button => {
-                    button.addEventListener('click', () => {
-                        if (!amountInput || !profitEl) return;
-                        const percent = parseFloat(button.getAttribute('data-reinvest-percent'));
-                        const profit = parseFloat(profitEl.getAttribute('data-profit'));
-                        if (isNaN(percent) || isNaN(profit)) return;
-                        const calc = (profit * (percent / 100)).toFixed(2);
-                        amountInput.value = calc;
-                    });
-                });
-            });
-            </script>
+<script src="<?php echo esc_url($PLUGIN_ASSETS . 'js/investment/reinvest-page.js?v=' . filemtime(__DIR__ . '/assets/js/investment/reinvest-page.js')); ?>"></script>
 </body>
 </html>

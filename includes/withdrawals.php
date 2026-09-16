@@ -2,19 +2,19 @@
 if (!defined('ABSPATH')) exit;
 
 /** Serialize withdrawal debits/refunds and roll back every balance change on failure. */
-function wsi_withdrawal_transaction($uid, $callback) {
+function wsi_withdrawal_transaction($uid, $callback, $extra_tables = [], $operation = 'withdrawal') {
     global $wpdb;
-    $tables = [$wpdb->users, $wpdb->usermeta, $wpdb->prefix . 'wsi_holdings', $wpdb->prefix . 'wsi_withdrawals'];
+    $tables = array_merge([$wpdb->users, $wpdb->usermeta, $wpdb->prefix . 'wsi_holdings', $wpdb->prefix . 'wsi_withdrawals'], $extra_tables);
     foreach ($tables as $table) {
         $engine = $wpdb->get_var($wpdb->prepare(
             'SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s', $table
         ));
         if (strtoupper((string) $engine) !== 'INNODB') {
-            return new WP_Error('wsi_storage', 'Withdrawal storage is unavailable. Please contact support.');
+            return new WP_Error('wsi_storage', ucfirst($operation) . ' storage is unavailable. Please contact support.');
         }
     }
     if ($wpdb->query('START TRANSACTION') === false) {
-        return new WP_Error('wsi_storage', 'Unable to start withdrawal. Please try again.');
+        return new WP_Error('wsi_storage', 'Unable to start ' . $operation . '. Please try again.');
     }
     try {
         // The user row also serializes requests when a balance meta row does not exist yet.
@@ -34,8 +34,8 @@ function wsi_withdrawal_transaction($uid, $callback) {
         return $result;
     } catch (Throwable $error) {
         $wpdb->query('ROLLBACK');
-        error_log('WSI withdrawal: ' . $error->getMessage());
-        return new WP_Error('wsi_storage', 'Unable to save withdrawal. Your balance has not been changed. Please try again.');
+        error_log('WSI ' . $operation . ': ' . $error->getMessage());
+        return new WP_Error('wsi_storage', 'Unable to save ' . $operation . '. Your balance has not been changed. Please try again.');
     } finally {
         wp_cache_delete($uid, 'user_meta');
     }

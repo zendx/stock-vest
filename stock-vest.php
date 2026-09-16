@@ -80,6 +80,7 @@
     define('WSI_DIR', plugin_dir_path(__FILE__));
     define('WSI_VER', '1.0.7');
     require_once WSI_DIR . 'includes/withdrawals.php';
+    require_once WSI_DIR . 'includes/reinvest.php';
     require_once WSI_DIR . 'includes/deposits.php';
 
     // Load translations for this plugin
@@ -2667,13 +2668,21 @@ add_action('user_register', function($user_id) {
 
 
             <div id="tab_reinvest" class="wsi-tab-content">
-              <h4>Reinvest from Profit</h4>
-              <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+              <h4>Reinvest</h4>
+              <?php $reinvest_total = round($balance_snapshot['total_assets_unlocked_amount'] + $balance_snapshot['available_balance'], 2); ?>
+              <p>Total Available Balance to Reinvest: $<?php echo number_format($reinvest_total, 2); ?>.</p>
+              <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" data-reinvest-form>
                 <input type="hidden" name="action" value="wsi_submit_reinvest">
                 <?php wp_nonce_field('wsi_reinvest_nonce'); ?>
-                <div><input name="amount" type="number" step="0.01" placeholder="Amount from profit" required></div>
-                <button>Reinvest</button>
+                <div role="group" aria-label="Reinvest percentage">
+                  <?php foreach ([10, 50, 100] as $percent): ?>
+                    <button type="button" data-reinvest-percent="<?php echo $percent; ?>" <?php disabled($balance_snapshot['balance_error'] || $reinvest_total <= 0); ?>><?php echo $percent; ?>%</button>
+                  <?php endforeach; ?>
+                </div>
+                <label>Amount ($) <input name="amount" type="number" min="0.01" step="0.01" max="<?php echo esc_attr(number_format($reinvest_total, 2, '.', '')); ?>" placeholder="Amount" required <?php disabled($balance_snapshot['balance_error'] || $reinvest_total <= 0); ?>></label>
+                <button <?php disabled($balance_snapshot['balance_error'] || $reinvest_total <= 0); ?>>Reinvest Now</button>
               </form>
+              <script defer src="<?php echo esc_url(plugins_url('pages/assets/js/investment/reinvest-page.js', WSI_FILE) . '?v=' . filemtime(WSI_DIR . 'pages/assets/js/investment/reinvest-page.js')); ?>"></script>
             </div>
 
             <div id="tab_stocks" class="wsi-tab-content">
@@ -3716,92 +3725,26 @@ function wsi_render_email_log_page() {
     function wsi_handle_reinvest() {
         if (!is_user_logged_in()) { wp_safe_redirect(wsi_login_url()); exit; }
 
-        global $wpdb;
         $dash_url = wsi_get_dashboard_page_url();
-
-        if (!wp_verify_nonce($_POST['_wpnonce'] ?? '', 'wsi_reinvest_nonce')) { 
-            wsi_popup("Reinvest Error", $dash_url); 
-            exit; 
+        $reinvest_url = home_url('/wsi/reinvest/');
+        if (!wp_verify_nonce($_POST['_wpnonce'] ?? '', 'wsi_reinvest_nonce')) {
+            wsi_popup('Reinvest Error', $reinvest_url);
+            exit;
         }
-
         $uid = get_current_user_id();
-        $amount = round(floatval($_POST['amount'] ?? 0), 2);
-
-        if ($amount <= 0) { 
-            wsi_popup("Invalid Reinvest Amount", $dash_url); 
-            exit; 
+        $result = wsi_create_reinvestment($uid, $_POST['amount'] ?? '');
+        if (is_wp_error($result)) {
+            wsi_popup($result->get_error_message(), $reinvest_url);
+            exit;
         }
-
-        if ($amount > wsi_get_profit($uid)) { 
-            wsi_popup("Insufficient Profit Balance", $dash_url); 
-            exit; 
+        // A notification failure must not turn a committed reinvestment into an error.
+        try {
+            wsi_log_tx($uid, $result['amount'], 'reinvest', 'Reinvested unlocked deposits and Available Balance');
+            wsi_audit($uid, 'reinvest', "Reinvested {$result['amount']}");
+        } catch (Throwable $error) {
+            error_log('WSI reinvestment notification: ' . $error->getMessage());
         }
-
-        // Create an approved deposit entry so reinvested funds follow deposit lock rules
-        $t_deposits = $wpdb->prefix . 'wsi_deposits';
-        $approved_at = current_time('mysql');
-        $inserted = $wpdb->insert(
-            $t_deposits,
-            [
-                'user_id'      => $uid,
-                'amount'       => $amount,
-                'amount_local' => 0,
-                'payment_type' => 'reinvest',
-                'crypto_wallet' => '',
-                'status'       => 'approved',
-                'approved_at'  => $approved_at,
-                'created_at'   => $approved_at
-            ],
-            ['%d', '%f', '%f', '%s', '%s', '%s', '%s', '%s']
-        );
-
-        if ($inserted === false) {
-            wsi_popup("Reinvest Error", $dash_url); 
-            exit; 
-        }
-        // Deduct from meta profit first, then accumulated_profit in holdings (FIFO), mirroring display logic
-        $remaining = $amount;
-
-        $meta_profit = floatval(get_user_meta($uid, 'wsi_profit_balance', true));
-        if ($meta_profit > 0) {
-            $use_meta = min($meta_profit, $remaining);
-            $new_meta = max(0, $meta_profit - $use_meta);
-            update_user_meta($uid, 'wsi_profit_balance', $new_meta);
-            $remaining -= $use_meta;
-        }
-
-        if ($remaining > 0) {
-            $t_hold = $wpdb->prefix . 'wsi_holdings';
-            $holdings = $wpdb->get_results($wpdb->prepare(
-                "SELECT id, accumulated_profit FROM $t_hold WHERE user_id=%d AND status='open' ORDER BY created_at ASC",
-                $uid
-            ));
-            foreach ($holdings as $h) {
-                if ($remaining <= 0) break;
-                $current_ap = floatval($h->accumulated_profit);
-                $use = min($current_ap, $remaining);
-                if ($use > 0) {
-                    $new_ap = max(0, $current_ap - $use);
-                    $wpdb->query($wpdb->prepare(
-                        "UPDATE $t_hold SET accumulated_profit = %f WHERE id=%d",
-                        $new_ap, $h->id
-                    ));
-                    $remaining -= $use;
-                }
-            }
-        }
-
-        if ($remaining > 0) {
-            // Safety net; should not happen because we pre-check total profit
-            wsi_popup("Insufficient Profit Balance", $dash_url); 
-            exit; 
-        }
-
-        wsi_inc_main($uid, $amount);
-        wsi_log_tx($uid, $amount, 'reinvest', 'Reinvest from profit');
-        wsi_audit($uid, 'reinvest', "Reinvested {$amount}");
-
-        wsi_popup("Reinvested Successfully", $dash_url);
+        wsi_popup('Reinvested Successfully', $dash_url);
         exit;
     }
 
@@ -4582,7 +4525,6 @@ function wsi_apply_referral($user_id, $amount, $deposit_id = 0) {
 
     function wsi_rest_balance_snapshot($uid) {
         global $wpdb;
-<<<<<<< HEAD
         $balances = wsi_get_withdrawal_balances($uid);
         if ($balances['balance_error']) {
             return new WP_Error('wsi_balances_unavailable', 'Balances are temporarily unavailable.', ['status' => 503]);
@@ -4590,26 +4532,6 @@ function wsi_apply_referral($user_id, $amount, $deposit_id = 0) {
         $assets = $balances['total_assets'];
         $profit = $balances['available_balance'];
         $available = $balances['available_balance'];
-=======
-        $assets = wsi_get_main($uid);
-        $profit = wsi_get_profit($uid);
-
-        $t_dep = $wpdb->prefix . 'wsi_deposits';
-        $deposits = $wpdb->get_results(
-            $wpdb->prepare("SELECT amount, created_at FROM $t_dep WHERE user_id=%d AND status='approved'", $uid)
-        );
-
-        $now = current_time('timestamp');
-        $unlock_seconds = 60 * 24 * 60 * 60; // 60 days
-        $unlocked_assets = 0;
-        foreach ($deposits as $d) {
-            if (($now - strtotime($d->created_at)) >= $unlock_seconds) {
-                $unlocked_assets += floatval($d->amount);
-            }
-        }
-
-        $available = $profit + $unlocked_assets;
->>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
         $net = $assets + $profit;
 
         return [
@@ -4617,21 +4539,17 @@ function wsi_apply_referral($user_id, $amount, $deposit_id = 0) {
             'profit'      => round($profit, 2),
             'available'   => round($available, 2),
             'net'         => round($net, 2),
-<<<<<<< HEAD
             'totalAssetsLocked' => $balances['total_assets_locked'],
             'totalAssetsWithdrawable' => $balances['total_assets_withdrawable'],
             'totalAssetsUnlockedAmount' => $balances['total_assets_unlocked_amount'],
             'totalAssetsLockedAmount' => $balances['total_assets_locked_amount'],
             'totalAssetsUnlockAt' => $balances['total_assets_unlock_at'],
-=======
->>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
         ];
     }
 
     add_action('rest_api_init', function () {
         $ns = 'wsi/v1';
 
-<<<<<<< HEAD
         register_rest_route($ns, '/dashboard', [
             'methods' => WP_REST_Server::READABLE,
             'permission_callback' => function () { return is_user_logged_in(); },
@@ -4649,8 +4567,6 @@ function wsi_apply_referral($user_id, $amount, $deposit_id = 0) {
             },
         ]);
 
-=======
->>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
         register_rest_route($ns, '/auth/login', [
             'methods'             => WP_REST_Server::CREATABLE,
             'permission_callback' => '__return_true',
@@ -4768,7 +4684,6 @@ function wsi_apply_referral($user_id, $amount, $deposit_id = 0) {
                 $uid = intval($request->get_param('wsi_user_id'));
                 $t = $wpdb->prefix . 'wsi_transactions';
                 $rows = $wpdb->get_results(
-<<<<<<< HEAD
                     $wpdb->prepare(
                         "SELECT id, amount, type, description, created_at
                          FROM {$t}
@@ -4780,9 +4695,6 @@ function wsi_apply_referral($user_id, $amount, $deposit_id = 0) {
                         '%deposit%',
                         '%pending%'
                     )
-=======
-                    $wpdb->prepare("SELECT id, amount, type, description, created_at FROM {$t} WHERE user_id=%d ORDER BY created_at DESC LIMIT 100", $uid)
->>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
                 );
 
                 $map_status = function ($type) {
@@ -4951,12 +4863,7 @@ function wsi_apply_referral($user_id, $amount, $deposit_id = 0) {
             },
         ]);
     });
-<<<<<<< HEAD
     // Register routes before refreshing stored rewrite rules after an update.
-=======
-    /* Add Routes ------------------------/
-    -------------------------------------*/
->>>>>>> 78468fb11cd1afb0eec0af2a3b55e12954a970cd
     add_action('init', function () {
         add_rewrite_rule('^wsi/?$', 'index.php?sv_page=home', 'top');
         add_rewrite_rule('^wsi/([a-z-]+)/?$', 'index.php?sv_page=$matches[1]', 'top');
