@@ -147,7 +147,7 @@ if (file_exists($wsi_asset_path)) {
                                                                     </select>
                                                                     <label for="withdrawal_source">Withdraw From</label>
                                                                 </div>
-                                                                <p id="wsi-withdraw-lock-message" class="text-secondary small mt-1 mb-0">$<?php echo number_format($unlocked_assets, 2); ?> withdrawable ? $<?php echo number_format($balance_snapshot['total_assets_locked_amount'], 2); ?> locked</p>
+                                                                <!--p id="wsi-withdraw-lock-message" class="text-secondary small mt-1 mb-0">$<?php echo number_format($unlocked_assets, 2); ?> withdrawable ? $<?php echo number_format($balance_snapshot['total_assets_locked_amount'], 2); ?> locked</p> -->
                                                             </div>
 
                                                             <!-- Amount -->
