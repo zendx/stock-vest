@@ -4,6 +4,8 @@ if (!defined('ABSPATH')) exit;
 /** Reinvest the selected amount, using available earnings before unlocked principal. */
 function wsi_create_reinvestment($uid, $amount) {
     global $wpdb;
+    $permission = wsi_transaction_permission($uid);
+    if (is_wp_error($permission)) return $permission;
     if (!is_scalar($amount) || !preg_match('/^\d{1,12}(?:\.\d{1,2})?$/D', (string) $amount) || (float) $amount <= 0) {
         return new WP_Error('wsi_amount', 'Enter a valid reinvestment amount with at most two decimal places.');
     }
@@ -13,6 +15,8 @@ function wsi_create_reinvestment($uid, $amount) {
         if ($wpdb->query($wpdb->prepare("SELECT id FROM $table WHERE user_id=%d FOR UPDATE", $uid)) === false) {
             throw new RuntimeException('Unable to lock deposits');
         }
+        $permission = wsi_transaction_permission($uid);
+        if (is_wp_error($permission)) return $permission;
         $balances = wsi_get_withdrawal_balances($uid);
         if ($balances['balance_error']) throw new RuntimeException('Unable to read balances');
         $principal = (int) round($balances['total_assets_unlocked_amount'] * 100);

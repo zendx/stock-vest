@@ -498,17 +498,14 @@
 
         $balance_error = $balance_error || !empty($wpdb->last_error) || !is_array($deposits);
 
-        $unlock_seconds = wsi_get_deposit_unlock_days() * DAY_IN_SECONDS;
         $now = time();
         foreach ((array) $deposits as $deposit) {
             // Deposit dates are stored in the site's timezone; expose a real UTC instant.
-            $date = $deposit->approved_at ?: $deposit->created_at;
-            $approved = DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $date, wp_timezone());
-            if (!$approved || $approved->format('Y-m-d H:i:s') !== $date) {
+            $unlock_at = wsi_deposit_unlock_timestamp($deposit);
+            if ($unlock_at === null) {
                 $locked_amount += max(0, (float) $deposit->amount); // Keep undated deposits locked.
                 continue;
             }
-            $unlock_at = $approved->getTimestamp() + $unlock_seconds;
             if ($unlock_at > $now) {
                 $locked_amount += max(0, (float) $deposit->amount);
                 $lock_until = $lock_until ? min($lock_until, $unlock_at) : $unlock_at;
@@ -903,11 +900,90 @@ add_action('user_register', function($user_id) {
             }
         }
 
-        $users = get_users(['number' => 200, 'orderby' => 'ID', 'order' => 'DESC']);
+        global $wpdb;
+        $per_page = 10;
+        $current_page = max(1, absint($_GET['users_page'] ?? 1));
+        $search = isset($_GET['user_search']) && is_string($_GET['user_search'])
+            ? sanitize_text_field(wp_unslash($_GET['user_search'])) : '';
+        $user_query = new WP_User_Query();
+        // Extend this query only; EXISTS avoids duplicate users when matching name metadata.
+        $search_users = function ($query) use ($user_query, $wpdb, $search) {
+            if ($query !== $user_query || $search === '') return;
+            $like = '%' . $wpdb->esc_like($search) . '%';
+            $query->query_where .= $wpdb->prepare(
+                " AND ({$wpdb->users}.user_login LIKE %s
+                    OR {$wpdb->users}.user_email LIKE %s
+                    OR {$wpdb->users}.display_name LIKE %s
+                    OR CAST({$wpdb->users}.ID AS CHAR) = %s
+                    OR EXISTS (SELECT 1 FROM {$wpdb->usermeta} AS wsi_user_names
+                        WHERE wsi_user_names.user_id = {$wpdb->users}.ID
+                        AND wsi_user_names.meta_key IN ('first_name', 'last_name')
+                        AND wsi_user_names.meta_value LIKE %s))",
+                $like, $like, $like, $search, $like
+            );
+        };
+        $query_args = ['number' => $per_page, 'paged' => $current_page, 'orderby' => 'ID', 'order' => 'DESC', 'count_total' => true];
+        add_action('pre_user_query', $search_users);
+        try {
+            $user_query->prepare_query($query_args);
+            $user_query->query();
+            $total_users = (int) $user_query->get_total();
+            $total_pages = max(1, (int) ceil($total_users / $per_page));
+            // Deleting the final user on a page should show the preceding page.
+            if ($current_page > $total_pages) {
+                $current_page = $total_pages;
+                $query_args['paged'] = $current_page;
+                $user_query->prepare_query($query_args);
+                $user_query->query();
+            }
+            $users = $user_query->get_results();
+        } finally {
+            remove_action('pre_user_query', $search_users);
+        }
+        $timer_now = time();
+        $user_deposits = [];
+        $deposit_error = false;
+        if ($users) {
+            $user_ids = array_map(function ($user) { return (int) $user->ID; }, $users);
+            $placeholders = implode(',', array_fill(0, count($user_ids), '%d'));
+            $deposits = $wpdb->get_results($wpdb->prepare(
+                "SELECT id, user_id, amount, payment_type, approved_at, created_at
+                 FROM {$wpdb->prefix}wsi_deposits
+                 WHERE user_id IN ($placeholders) AND status='approved'
+                 ORDER BY COALESCE(approved_at, created_at) DESC, id DESC", ...$user_ids
+            ));
+            $deposit_error = !empty($wpdb->last_error) || !is_array($deposits);
+            foreach ((array) $deposits as $deposit) {
+                $unlock_at = wsi_deposit_unlock_timestamp($deposit);
+                if ($unlock_at !== null && $timer_now >= $unlock_at + DAY_IN_SECONDS) continue;
+                $user_deposits[(int) $deposit->user_id][] = $deposit;
+            }
+        }
+        $list_url = add_query_arg(['page' => 'wsi_users', 'user_search' => $search], admin_url('admin.php'));
+        $pagination = paginate_links([
+            'base' => add_query_arg('users_page', '%#%', $list_url),
+            'format' => '', 'current' => $current_page, 'total' => $total_pages,
+            'prev_text' => '&laquo; Previous', 'next_text' => 'Next &raquo;',
+            'type' => 'plain', 'add_args' => false,
+        ]);
+
         ?>
 
         <div class="wrap">
             <h1>Users</h1>
+            <form method="get" action="<?php echo esc_url(admin_url('admin.php')); ?>" class="wsi-user-search">
+                <input type="hidden" name="page" value="wsi_users">
+                <label class="screen-reader-text" for="wsi-user-search">Search users</label>
+                <input type="search" id="wsi-user-search" name="user_search" value="<?php echo esc_attr($search); ?>" placeholder="Username, name, email or ID">
+                <button type="submit" class="button">Search Users</button>
+                <?php if ($search !== '') : ?>
+                    <a class="button" href="<?php echo esc_url(add_query_arg('page', 'wsi_users', admin_url('admin.php'))); ?>">Clear</a>
+                <?php endif; ?>
+            </form>
+            <div class="tablenav top wsi-user-navigation">
+                <span class="displaying-num"><?php echo esc_html(number_format_i18n($total_users)); ?> users<?php if ($total_users > 0) : ?> &middot; Showing <?php echo esc_html((($current_page - 1) * $per_page + 1) . '-' . min($current_page * $per_page, $total_users)); ?><?php endif; ?></span>
+                <nav class="tablenav-pages" aria-label="Users pagination"><?php echo wp_kses_post($pagination ?? ''); ?></nav>
+            </div>
             <table class="widefat striped" id="wsi-users-table">
                 <thead>
                     <tr>
@@ -956,7 +1032,7 @@ add_action('user_register', function($user_id) {
                             </form>
                             <form method="post" style="display:inline"><?php wp_nonce_field('wsi_users_nonce'); ?>
                                 <input type="hidden" name="user_id" value="<?php echo intval($u->ID); ?>">
-                                <button name="action_user" value="suspend" class="button">Suspend</button>
+                                <button name="action_user" value="<?php echo $status === 'Suspended' ? 'unsuspend' : 'suspend'; ?>" class="button"><?php echo $status === 'Suspended' ? 'Unsuspend' : 'Suspend'; ?></button>
                             </form>
                             <form method="post" style="display:inline">
                                 <?php wp_nonce_field('wsi_users_nonce'); ?>
@@ -993,15 +1069,66 @@ add_action('user_register', function($user_id) {
                                 <tr><th>State</th><td><?php echo esc_html($state); ?></td></tr>
                                 <tr><th>City</th><td><?php echo esc_html($city); ?></td></tr>
                             </table>
+                        <section class="wsi-deposit-availability" aria-label="Deposit availability">
+                            <h2>Deposit Availability</h2>
+                            <?php if ($deposit_error) : ?>
+                                <span>Unable to load deposit availability. Refresh to retry.</span>
+                            <?php elseif (empty($user_deposits[$u->ID])) : ?>
+                                <span class="description">No active or recently completed deposit cycles</span>
+                            <?php else : ?>
+                                <div class="wsi-deposit-stack">
+                                <?php foreach ($user_deposits[$u->ID] as $deposit) :
+                                    $unlock_at = wsi_deposit_unlock_timestamp($deposit);
+                                ?>
+                                    <div class="wsi-deposit-timer">
+                                        <strong>$<?php echo esc_html(number_format((float) $deposit->amount, 2)); ?></strong>
+                                        <span class="description">#<?php echo (int) $deposit->id; ?><?php echo $deposit->payment_type === 'reinvest' ? ' (Reinvestment)' : ''; ?></span>
+                                        <?php if ($unlock_at === null) : ?>
+                                            <p class="wsi-deposit-countdown">Locked &mdash; approval date needs verification</p>
+                                        <?php else : ?>
+                                            <p class="wsi-deposit-countdown" data-unlock-at="<?php echo (int) $unlock_at; ?>"><?php echo $unlock_at > $timer_now ? 'Locked' : 'Lock period ended'; ?></p>
+                                            <time datetime="<?php echo esc_attr(gmdate('c', $unlock_at)); ?>">Unlocks: <?php echo esc_html(wp_date('M j, Y H:i:s T', $unlock_at)); ?></time>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php endforeach; ?>
+                                </div>
+                                <p class="description wsi-deposit-empty" hidden>No active or recently completed deposit cycles.</p>
+                                <p class="description">Completed cycles disappear 24 hours after unlocking. Approved amounts shown. Withdrawals and account suspension may affect what can be withdrawn.</p>
+                            <?php endif; ?>
+                        </section>
                         </td>
                     </tr>
 
                     <?php endforeach; ?>
+                    <?php if (!$users) : ?>
+                        <tr><td colspan="8">No users found<?php echo $search !== '' ? ' matching your search' : ''; ?>.</td></tr>
+                    <?php endif; ?>
                 </tbody>
             </table>
+            <?php if ($total_pages > 1) : ?>
+                <div class="tablenav bottom wsi-user-navigation">
+                    <nav class="tablenav-pages" aria-label="Users pagination"><?php echo wp_kses_post($pagination); ?></nav>
+                </div>
+            <?php endif; ?>
         </div>
 
         <style>
+            .wsi-deposit-availability { padding: 16px; border-top: 1px solid #dcdcde; }
+            .wsi-deposit-availability h2 { margin: 0 0 12px; font-size: 15px; }
+            .wsi-deposit-stack { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; }
+            .wsi-deposit-timer { background: #f6f7f7; border: 1px solid #dcdcde; border-left: 3px solid #dba617; border-radius: 4px; padding: 8px 10px; }
+            .wsi-deposit-timer.is-unlocked { border-left-color: #008a20; }
+            .wsi-deposit-timer p { margin: 4px 0; font-weight: 600; }
+            .wsi-deposit-timer time { display: block; font-size: 12px; }
+
+            .wsi-user-search { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+            .wsi-user-search input[type="search"] { width: 320px; max-width: 100%; }
+            .wsi-user-navigation { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; height: auto; min-height: 32px; }
+            .wsi-user-navigation .tablenav-pages { margin: 0; }
+            .wsi-user-navigation .page-numbers { display: inline-block; padding: 4px 10px; margin: 2px; border: 1px solid #c3c4c7; border-radius: 3px; background: #f6f7f7; text-decoration: none; }
+            .wsi-user-navigation .page-numbers.current { background: #2271b1; color: #fff; border-color: #2271b1; }
+            .wsi-user-navigation a.page-numbers:hover { background: #e5e5e5; }
+            .wsi-user-navigation .page-numbers.dots { border: 0; background: transparent; }
             .nested-user-table {
                 width: 100%;
                 border-collapse: collapse;
@@ -1024,6 +1151,35 @@ add_action('user_register', function($user_id) {
 
         <script>
             document.addEventListener('DOMContentLoaded', function() {
+                const depositTimers = document.querySelectorAll('[data-unlock-at]');
+                const serverTime = <?php echo wp_json_encode($timer_now * 1000); ?>;
+                const timerStarted = performance.now();
+                function updateDepositTimers() {
+                    const now = serverTime + (performance.now() - timerStarted);
+                    depositTimers.forEach(timer => {
+                        const unlockTime = Number(timer.dataset.unlockAt) * 1000;
+                        const card = timer.closest('.wsi-deposit-timer');
+                        card.hidden = now >= unlockTime + 86400000;
+                        const remaining = Math.max(0, Math.ceil((unlockTime - now) / 1000));
+                        const unlocked = remaining === 0;
+                        timer.closest('.wsi-deposit-timer').classList.toggle('is-unlocked', unlocked);
+                        if (unlocked) {
+                            timer.textContent = 'Lock period ended';
+                            return;
+                        }
+                        const days = Math.floor(remaining / 86400);
+                        const hours = Math.floor((remaining % 86400) / 3600);
+                        const minutes = Math.floor((remaining % 3600) / 60);
+                        const seconds = remaining % 60;
+                        timer.textContent = 'Available in ' + days + 'd ' + hours + 'h ' + minutes + 'm ' + seconds + 's';
+                    });
+                    document.querySelectorAll('.wsi-deposit-availability').forEach(section => {
+                        const empty = section.querySelector('.wsi-deposit-empty');
+                        if (empty) empty.hidden = Array.from(section.querySelectorAll('.wsi-deposit-timer')).some(card => !card.hidden);
+                    });
+                }
+                updateDepositTimers();
+                if (depositTimers.length) setInterval(updateDepositTimers, 1000);
                 const buttons = document.querySelectorAll('.toggle-details');
                 buttons.forEach(btn => {
                     btn.addEventListener('click', function() {
@@ -2101,7 +2257,6 @@ add_action('user_register', function($user_id) {
     function wsi_shortcode_dashboard() {
         if (!is_user_logged_in()) return '<div class="notice">Please <a href="' . wp_login_url() . '">log in</a> to access your dashboard.</div>';
         $uid = get_current_user_id();
-        if (get_user_meta($uid, 'wsi_suspended', true)) return '<div class="notice notice-error">Account suspended. Contact admin.</div>';
         global $wpdb;
         $opts = wsi_get_opts();
         $t_stocks = $wpdb->prefix . 'wsi_stocks';
@@ -2130,6 +2285,7 @@ add_action('user_register', function($user_id) {
         $txs = $wpdb->get_results($wpdb->prepare("SELECT * FROM $t_tx WHERE user_id=%d ORDER BY created_at DESC LIMIT 50", $uid));
 
         ob_start();
+        if (get_user_meta($uid, 'wsi_suspended', true)) echo '<div class="notice notice-error">Your account is suspended. Transactions are disabled. Please contact support.</div>';
         ?>
         <div class="wsi-tabs-wrap">
           <div class="card" style="padding:12px">
@@ -2937,6 +3093,7 @@ add_action('user_register', function($user_id) {
     function wsi_toggle_smart_farming() {
         if (!is_user_logged_in()) wp_die('0');
         $uid = get_current_user_id();
+        wsi_require_transaction_permission($uid);
 
         $status = ($_POST['status'] === 'yes') ? 'yes' : 'no';
         update_user_meta($uid, 'wsi_smart_farming', $status);
@@ -2977,6 +3134,7 @@ add_action('user_register', function($user_id) {
             
             global $wpdb;
             $uid = get_current_user_id();
+        wsi_require_transaction_permission($uid);
             $t_deposits = $wpdb->prefix . 'wsi_deposits';
             
             $amount_usd = floatval($_POST['amount'] ?? $_POST['amount_usd'] ?? 0);
@@ -3046,6 +3204,7 @@ add_action('user_register', function($user_id) {
             
             global $wpdb;
             $uid = get_current_user_id();
+            wsi_require_transaction_permission($uid);
             $t_deposits = $wpdb->prefix . 'wsi_deposits';
             
             $amount_usd = floatval($_POST['amount'] ?? $_POST['amount_usd'] ?? 0);
@@ -3116,6 +3275,7 @@ add_action('user_register', function($user_id) {
         }
 
         $uid = get_current_user_id();
+        wsi_require_transaction_permission($uid);
         $state = sanitize_text_field($_POST['state'] ?? 'no');
 
         if ($state === 'yes') {
@@ -3173,12 +3333,13 @@ add_action('user_register', function($user_id) {
     $method = sanitize_text_field(wp_unslash($_POST['crypto_type'] ?? ''));
     $payout = sanitize_key($_POST['payout_method'] ?? 'crypto');
     $bank_name = sanitize_text_field(wp_unslash($_POST['bank_name'] ?? ''));
+    $account_name = sanitize_text_field(wp_unslash($_POST['account_name'] ?? ''));
     if ($payout === 'bank') {
         $method = 'bank';
         $acct = sanitize_text_field(wp_unslash($_POST['account_number'] ?? ''));
     }
     $result = in_array($payout, ['bank', 'crypto'], true)
-        ? wsi_create_withdrawal_request($uid, $amount, $source, $method, $acct, $bank_name)
+        ? wsi_create_withdrawal_request($uid, $amount, $source, $method, $acct, $bank_name, $account_name)
         : new WP_Error('wsi_payout', 'Select Bank Account or Crypto.');
     if (is_wp_error($result)) {
         if ($is_ajax) wp_send_json_error(['message' => $result->get_error_message()]);
@@ -3796,6 +3957,7 @@ function wsi_render_email_log_page() {
         }
 
         $uid = get_current_user_id();
+        wsi_require_transaction_permission($uid);
         $stock_id = intval($_POST['stock_id']);
         $units = isset($_POST['units']) ? max(1, floatval($_POST['units'])) : 1;
 
@@ -3858,6 +4020,7 @@ function wsi_render_email_log_page() {
         }
 
         $uid = get_current_user_id();
+        wsi_require_transaction_permission($uid);
         $hid = intval($_POST['holding_id'] ?? 0);
 
         global $wpdb;
@@ -4077,6 +4240,7 @@ function wsi_apply_referral($user_id, $amount, $deposit_id = 0) {
 
         global $wpdb;
         $uid = get_current_user_id();
+        wsi_require_transaction_permission($uid);
         $sid = intval($_POST['stock_id']);
         $stock = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$wpdb->prefix}wsi_stocks WHERE id=%d", $sid));
         if (!$stock) wp_die('Stock not found');
@@ -4808,6 +4972,10 @@ function wsi_apply_referral($user_id, $amount, $deposit_id = 0) {
                 }
 
                 $payload = $request->get_json_params();
+                if (isset($payload['smart_farming'])) {
+                    $permission = wsi_transaction_permission($uid);
+                    if (is_wp_error($permission)) return $permission;
+                }
                 $fields = [
                     'first_name',
                     'last_name',

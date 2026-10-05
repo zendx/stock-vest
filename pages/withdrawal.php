@@ -180,6 +180,13 @@ if (file_exists($wsi_asset_path)) {
                                                                 </div>
                                                             </div>
 
+                                                            <div class="col-12 col-md-6 mb-3" data-bank-field hidden>
+                                                                <div class="form-floating">
+                                                                    <input type="text" name="account_name" id="withdraw_account_name" class="form-control" placeholder="Account Name" maxlength="150" disabled>
+                                                                    <label for="withdraw_account_name">Account Name</label>
+                                                                </div>
+                                                            </div>
+
                                                             <!-- Crypto Type -->
                                                             <div class="col-12 col-md-6 col-xl-4 mb-3" data-crypto-field>
                                                                 <div class="form-floating">

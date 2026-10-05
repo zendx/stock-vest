@@ -278,9 +278,15 @@ try {
     reset_fixture();
     check(is_wp_error(wsi_create_withdrawal_request(1, '10', 'available_balance', 'bank', '0012345678')), 'Bank withdrawals require a bank name');
     check(is_wp_error(wsi_create_withdrawal_request(1, '10', 'available_balance', 'bank', '', 'Test Bank')), 'Bank withdrawals require an account number');
-    $bank = wsi_create_withdrawal_request(1, '10', 'available_balance', 'bank', '0012345678', 'Test Bank');
+    check(is_wp_error(wsi_create_withdrawal_request(1, '10', 'available_balance', 'bank', '0012345678', 'Test Bank')), 'Bank withdrawals require an account name');
+    update_user_meta(1, 'wsi_suspended', 1);
+    check(wsi_create_withdrawal_request(1, '10', 'available_balance', 'BTC', 'wallet')->code === 'wsi_suspended' && unchanged(1000, 150), 'Suspension blocks withdrawals without changing balances');
+    check(wsi_create_reinvestment(1, '10')->code === 'wsi_suspended' && unchanged(1000, 150), 'Suspension blocks reinvestment without changing balances');
+    update_user_meta(1, 'wsi_suspended', 0);
+    check(wsi_transaction_permission(1) === true, 'Unsuspending restores transaction permission');
+    $bank = wsi_create_withdrawal_request(1, '10', 'available_balance', 'bank', '0012345678', 'Test Bank', 'Fixture User');
     $stored = $wpdb->get_row('SELECT method, account_details FROM wp_wsi_withdrawals WHERE id=' . $bank['withdrawal_id']);
-    check($stored->method === 'bank' && strpos($stored->account_details, 'Test Bank') !== false && strpos($stored->account_details, '0012345678') !== false && unchanged(1000, 140), 'Bank details preserve leading zeros and charge only the selected balance');
+    check($stored->method === 'bank' && strpos($stored->account_details, 'Account Name: Fixture User') !== false && strpos($stored->account_details, 'Test Bank') !== false && strpos($stored->account_details, '0012345678') !== false && unchanged(1000, 140), 'Bank details preserve leading zeros and charge only the selected balance');
     reset_fixture();
     deposit(time() - 600, 'pending');
     $deposit_id = $wpdb->insert_id;
@@ -310,7 +316,7 @@ try {
     reset_fixture();
     $GLOBALS['test_logged_in'] = true;
     $GLOBALS['test_notification_failure'] = true;
-    $_POST = ['_wpnonce' => 'test-nonce', 'amount' => '10.00', 'withdrawal_source' => 'available_balance', 'payout_method' => 'bank', 'bank_name' => 'Example Bank', 'account_number' => '0012345678'];
+    $_POST = ['_wpnonce' => 'test-nonce', 'amount' => '10.00', 'withdrawal_source' => 'available_balance', 'payout_method' => 'bank', 'bank_name' => 'Example Bank', 'account_number' => '0012345678', 'account_name' => 'Fixture User'];
     ob_start();
     try { wsi_handle_withdraw(); }
     catch (TestJsonResponse $response) {

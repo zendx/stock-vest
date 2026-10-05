@@ -1,6 +1,24 @@
 <?php
 if (!defined('ABSPATH')) exit;
 
+/** Suspension restricts financial actions without restricting authentication or viewing. */
+function wsi_transaction_permission($uid) {
+    if (get_user_meta($uid, 'wsi_suspended', true)) {
+        return new WP_Error('wsi_suspended', 'Your account is suspended. Transactions are disabled. Please contact support.', ['status' => 403]);
+    }
+    return true;
+}
+
+/** Stop a user transaction before any balances or settings are changed. */
+function wsi_require_transaction_permission($uid) {
+    $permission = wsi_transaction_permission($uid);
+    if (!is_wp_error($permission)) return;
+    if (defined('DOING_AJAX') && DOING_AJAX) {
+        wp_send_json_error(['message' => $permission->get_error_message()], 403);
+    }
+    wp_die(esc_html($permission->get_error_message()), 'Account suspended', ['response' => 403]);
+}
+
 /** Serialize withdrawal debits/refunds and roll back every balance change on failure. */
 function wsi_withdrawal_transaction($uid, $callback, $extra_tables = [], $operation = 'withdrawal') {
     global $wpdb;
@@ -41,8 +59,10 @@ function wsi_withdrawal_transaction($uid, $callback, $extra_tables = [], $operat
     }
 }
 
-function wsi_create_withdrawal_request($uid, $amount, $source, $method, $account, $bank_name = '') {
+function wsi_create_withdrawal_request($uid, $amount, $source, $method, $account, $bank_name = '', $account_name = '') {
     global $wpdb;
+    $permission = wsi_transaction_permission($uid);
+    if (is_wp_error($permission)) return $permission;
     // Reject malformed amounts and sources instead of silently charging a different account.
     if (!is_scalar($amount) || !preg_match('/^\d{1,12}(?:\.\d{1,2})?$/D', (string) $amount) || (float) $amount <= 0) {
         return new WP_Error('wsi_amount', 'Enter a valid withdrawal amount with at most two decimal places.');
@@ -51,16 +71,18 @@ function wsi_create_withdrawal_request($uid, $amount, $source, $method, $account
         return new WP_Error('wsi_source', 'Select Available Balance or Total Assets.');
     }
     if ($method === 'bank') {
-        if (trim($bank_name) === '' || trim($account) === '' || strlen($bank_name) > 150 || strlen($account) > 64) {
-            return new WP_Error('wsi_bank_details', 'Enter a valid bank name and account number.');
+        if (trim($bank_name) === '' || trim($account) === '' || strlen($bank_name) > 150 || strlen($account) > 64 || trim($account_name) === '' || strlen($account_name) > 150) {
+            return new WP_Error('wsi_bank_details', 'Enter a valid bank name, account number, and account name.');
         }
-        $account = 'Bank Name: ' . $bank_name . "\nAccount Number: " . $account;
+        $account = 'Bank Name: ' . $bank_name . "\nAccount Number: " . $account . "\nAccount Name: " . $account_name;
     }
     if (trim($method) === '' || trim($account) === '') {
         return new WP_Error('wsi_destination', 'Select a payout network and enter your wallet address.');
     }
     $amount = round((float) $amount, 2);
     return wsi_withdrawal_transaction($uid, function () use ($wpdb, $uid, $amount, $source, $method, $account) {
+        $permission = wsi_transaction_permission($uid);
+        if (is_wp_error($permission)) return $permission;
         $balances = wsi_get_withdrawal_balances($uid);
         if ($balances['balance_error']) throw new RuntimeException('Unable to read balances');
         if ($source === 'total_assets' && $balances['total_assets_locked']) {

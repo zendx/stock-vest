@@ -1,6 +1,14 @@
 <?php
 if (!defined('ABSPATH')) exit;
 
+/** Use the same approval date and lock duration as withdrawal eligibility. */
+function wsi_deposit_unlock_timestamp($deposit) {
+    $date = $deposit->approved_at ?: $deposit->created_at;
+    $approved = DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', (string) $date, wp_timezone());
+    if (!$approved || $approved->format('Y-m-d H:i:s') !== $date) return null;
+    return $approved->getTimestamp() + wsi_get_deposit_unlock_days() * DAY_IN_SECONDS;
+}
+
 /** Return only a deposit owned by the authenticated user, or their latest pending request. */
 function wsi_get_deposit_status($uid, $deposit_id = 0) {
     global $wpdb;
