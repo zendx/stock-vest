@@ -869,6 +869,29 @@ add_action('user_register', function($user_id) {
             $amt = isset($_POST['amount']) ? floatval($_POST['amount']) : 0;
 
             switch ($act) {
+                case 'restart_deposit_cycle':
+                    global $wpdb;
+                    $deposit_id = absint($_POST['deposit_id'] ?? 0);
+                    if ($uid <= 0 || $deposit_id <= 0) {
+                        echo '<div class="notice notice-error"><p>Invalid deposit reference.</p></div>';
+                        break;
+                    }
+                    $restarted_at = current_time('mysql');
+                    $updated = $wpdb->update(
+                        $wpdb->prefix . 'wsi_deposits',
+                        ['approved_at' => $restarted_at],
+                        ['id' => $deposit_id, 'user_id' => $uid, 'status' => 'approved'],
+                        ['%s'], ['%d', '%d', '%s']
+                    );
+                    if ($updated === false) {
+                        echo '<div class="notice notice-error"><p>Unable to restart the deposit cycle. Please try again.</p></div>';
+                    } elseif ($updated === 0) {
+                        echo '<div class="notice notice-warning"><p>No cycle was changed. The deposit may no longer be approved or was just restarted.</p></div>';
+                    } else {
+                        echo '<div class="notice notice-success"><p>Deposit cycle restarted. The full deposit waiting period starts now.</p></div>';
+                        wsi_audit(get_current_user_id(), 'restart_deposit_cycle', "Restarted deposit {$deposit_id} for user {$uid} at {$restarted_at}");
+                    }
+                    break;
                 case 'delete':
                     require_once(ABSPATH . 'wp-admin/includes/user.php');
                     wp_delete_user($uid);
@@ -1048,12 +1071,12 @@ add_action('user_register', function($user_id) {
                             </form>
                         </td>
                         <td>
-                            <button class="button toggle-details">Show Details</button>
+                            <button class="button toggle-details"><?php echo isset($act, $uid) && $act === 'restart_deposit_cycle' && $uid === (int) $u->ID ? 'Hide Details' : 'Show Details'; ?></button>
                         </td>
                     </tr>
 
                     <!-- Collapsible nested table -->
-                    <tr class="user-details-row" style="display:none;">
+                    <tr class="user-details-row" style="display:<?php echo isset($act, $uid) && $act === 'restart_deposit_cycle' && $uid === (int) $u->ID ? 'table-row' : 'none'; ?>;">
                         <td colspan="8">
                             <table class="nested-user-table">
                                 <tr><th>First Name</th><td><?php echo esc_html($first_name); ?></td></tr>
@@ -1089,6 +1112,12 @@ add_action('user_register', function($user_id) {
                                             <p class="wsi-deposit-countdown" data-unlock-at="<?php echo (int) $unlock_at; ?>"><?php echo $unlock_at > $timer_now ? 'Locked' : 'Lock period ended'; ?></p>
                                             <time datetime="<?php echo esc_attr(gmdate('c', $unlock_at)); ?>">Unlocks: <?php echo esc_html(wp_date('M j, Y H:i:s T', $unlock_at)); ?></time>
                                         <?php endif; ?>
+                                        <form method="post">
+                                            <?php wp_nonce_field('wsi_users_nonce'); ?>
+                                            <input type="hidden" name="user_id" value="<?php echo (int) $u->ID; ?>">
+                                            <input type="hidden" name="deposit_id" value="<?php echo (int) $deposit->id; ?>">
+                                            <button type="submit" name="action_user" value="restart_deposit_cycle" class="button" title="Restart this deposit's full waiting period from now">Restart Cycle</button>
+                                        </form>
                                     </div>
                                 <?php endforeach; ?>
                                 </div>
