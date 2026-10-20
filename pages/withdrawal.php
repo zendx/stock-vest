@@ -13,6 +13,7 @@ $PLUGIN_ASSETS = plugins_url('pages/assets/', dirname(dirname(__FILE__)) . '/sto
 $PLUGIN_DIR = dirname(dirname(__FILE__));
 $wsi = $PLUGIN_ASSETS;
 $balance_snapshot = wsi_get_withdrawal_balances(get_current_user_id());
+$withdrawal_eligibility = wsi_withdrawal_eligibility(get_current_user_id(), $balance_snapshot);
 $total_assets = $balance_snapshot['total_assets'];
 $unlocked_assets = $balance_snapshot['total_assets_unlocked_amount'];
 $available_balance = $balance_snapshot['available_balance'];
@@ -132,6 +133,7 @@ if (file_exists($wsi_asset_path)) {
                                                         </div>
                                                     </div>
 
+                                                    <p id="wsi-withdraw-eligibility" role="status"><?php echo is_wp_error($withdrawal_eligibility) ? esc_html($withdrawal_eligibility->get_error_message()) : ''; ?></p>
                                                     <form method="post" action="<?php echo esc_url(admin_url('admin-ajax.php')); ?>" id="wsi-withdrawal-form">
                                                         <input type="hidden" name="action" value="wsi_submit_withdraw">
                                                         <?php wp_nonce_field('wsi_withdraw_nonce'); ?>
@@ -147,7 +149,7 @@ if (file_exists($wsi_asset_path)) {
                                                                     </select>
                                                                     <label for="withdrawal_source">Withdraw From</label>
                                                                 </div>
-                                                                <!--p id="wsi-withdraw-lock-message" class="text-secondary small mt-1 mb-0">$<?php echo number_format($unlocked_assets, 2); ?> withdrawable ? $<?php echo number_format($balance_snapshot['total_assets_locked_amount'], 2); ?> locked</p> -->
+                                                                <p id="wsi-withdraw-lock-message" class="text-secondary small mt-1 mb-0">$<?php echo number_format($unlocked_assets, 2); ?> unlocked principal; $<?php echo number_format($balance_snapshot['total_assets_locked_amount'], 2); ?> locked</p>
                                                             </div>
 
                                                             <!-- Amount -->
@@ -290,6 +292,8 @@ if (file_exists($wsi_asset_path)) {
                 payout.addEventListener('change', updatePayoutFields);
                 updatePayoutFields();
                 const submitButton = form.querySelector('button[type="submit"]');
+                let eligible = <?php echo wp_json_encode(!is_wp_error($withdrawal_eligibility)); ?>;
+                submitButton.disabled = !eligible;
                 let submitting = false;
                 function refreshBalances() {
                     if (submitting) return;
@@ -299,6 +303,9 @@ if (file_exists($wsi_asset_path)) {
                     })
                     .then(response => response.ok ? response.json() : Promise.reject(response))
                     .then(data => {
+                        eligible = data.withdrawalEligible === true;
+                        submitButton.disabled = submitting || !eligible;
+                        document.getElementById('wsi-withdraw-eligibility').textContent = data.withdrawalEligibilityMessage || '';
                         balances.total_assets = Number(data.totalAssetsUnlockedAmount);
                         balances.available_balance = Number(data.available);
                         const locked = data.totalAssetsLocked !== false;
@@ -316,7 +323,7 @@ if (file_exists($wsi_asset_path)) {
                         icon.setAttribute('aria-label', icon.title);
                         const message = document.getElementById('wsi-withdraw-lock-message');
                         message.className = 'text-secondary small mt-1 mb-0';
-                        message.textContent = money(balances.total_assets) + ' withdrawable ? ' + money(Number(data.totalAssetsLockedAmount)) + ' locked';
+                        message.textContent = money(balances.total_assets) + ' unlocked principal; ' + money(Number(data.totalAssetsLockedAmount)) + ' locked';
                         updateAmountLimit();
 
                     })
@@ -338,7 +345,7 @@ if (file_exists($wsi_asset_path)) {
 
                 form.addEventListener('submit', function(e) {
                     e.preventDefault();
-                    if (submitting || !form.reportValidity()) return;
+                    if (submitting || !eligible || !form.reportValidity()) return;
                     submitting = true;
                     submitButton.disabled = true;
 
@@ -370,7 +377,7 @@ if (file_exists($wsi_asset_path)) {
                     })
                     .finally(() => {
                         submitting = false;
-                        submitButton.disabled = false;
+                        submitButton.disabled = !eligible;
                         refreshBalances();
                     });
                 });

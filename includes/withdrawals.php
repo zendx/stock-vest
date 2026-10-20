@@ -1,6 +1,26 @@
 <?php
 if (!defined('ABSPATH')) exit;
 
+/** Every user needs a direct referral with an approved deposit. */
+function wsi_withdrawal_eligibility($uid, $balances) {
+    global $wpdb;
+    if ($balances['balance_error']) return new WP_Error('wsi_storage', 'Unable to check withdrawal eligibility. Please try again.');
+    if (empty($balances['withdrawal_period_reached'])) {
+        return new WP_Error('wsi_locked', 'Withdrawals are locked until an approved investment completes its unlock period.');
+    }
+    $qualified = $wpdb->get_var($wpdb->prepare(
+        "SELECT dep.id FROM {$wpdb->prefix}wsi_deposits dep
+        INNER JOIN {$wpdb->users} invited ON invited.ID = dep.user_id
+        WHERE dep.user_id <> %d AND dep.status = 'approved' AND dep.amount > 0
+        AND (dep.payment_type IS NULL OR dep.payment_type <> 'reinvest')
+        AND EXISTS (SELECT 1 FROM {$wpdb->usermeta} ref
+            WHERE ref.user_id = dep.user_id AND ref.meta_key IN ('wsi_inviter_id', 'wsi_referred_by')
+            AND CAST(ref.meta_value AS UNSIGNED) = %d) LIMIT 1", $uid, $uid
+    ));
+    if ($wpdb->last_error) return new WP_Error('wsi_storage', 'Unable to check referral eligibility. Please try again.');
+    return $qualified ? true : new WP_Error('wsi_referral_required', 'Invite at least one person who makes an approved deposit before withdrawing.');
+}
+
 /** Suspension restricts financial actions without restricting authentication or viewing. */
 function wsi_transaction_permission($uid) {
     if (get_user_meta($uid, 'wsi_suspended', true)) {
@@ -85,6 +105,8 @@ function wsi_create_withdrawal_request($uid, $amount, $source, $method, $account
         if (is_wp_error($permission)) return $permission;
         $balances = wsi_get_withdrawal_balances($uid);
         if ($balances['balance_error']) throw new RuntimeException('Unable to read balances');
+        $eligibility = wsi_withdrawal_eligibility($uid, $balances);
+        if (is_wp_error($eligibility)) return $eligibility;
         if ($source === 'total_assets' && $balances['total_assets_locked']) {
             $message = $balances['total_assets_unlock_at']
                 ? 'Total Assets are locked until ' . wp_date(get_option('date_format') . ' H:i T', strtotime($balances['total_assets_unlock_at']))

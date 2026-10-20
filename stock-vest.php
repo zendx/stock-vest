@@ -499,6 +499,7 @@
         $balance_error = $balance_error || !empty($wpdb->last_error) || !is_array($deposits);
 
         $now = time();
+        $period_reached = false;
         foreach ((array) $deposits as $deposit) {
             // Deposit dates are stored in the site's timezone; expose a real UTC instant.
             $unlock_at = wsi_deposit_unlock_timestamp($deposit);
@@ -509,6 +510,8 @@
             if ($unlock_at > $now) {
                 $locked_amount += max(0, (float) $deposit->amount);
                 $lock_until = $lock_until ? min($lock_until, $unlock_at) : $unlock_at;
+            } elseif ((float) $deposit->amount > 0) {
+                $period_reached = true;
             }
         }
 
@@ -516,6 +519,7 @@
         $unlocked_amount = round(max(0, $total_assets - $locked_amount), 2);
         $locked = $balance_error || ($locked_amount > 0 && $unlocked_amount <= 0);
         return [
+            'withdrawal_period_reached' => !$balance_error && $period_reached,
             'total_assets_locked_amount' => round($locked_amount, 2),
             'total_assets_unlocked_amount' => $unlocked_amount,
             'balance_error' => $balance_error,
@@ -2420,7 +2424,7 @@ add_action('user_register', function($user_id) {
               $unlock_phrase = $unlock_days . ' ' . $unlock_label;
               $unlock_compound = $unlock_days . '-' . $unlock_label;
               ?>
-              <p><em>*Assets cannot be withdrawn until <?php echo esc_html($unlock_phrase); ?> after deposit. Only Profit Income is withdrawable before the <?php echo esc_html($unlock_compound); ?> period.</em></p>
+              <p><em>*Withdrawals require a completed <?php echo esc_html($unlock_phrase); ?> investment period and a direct referral with an approved deposit. This applies to existing and new users.</em></p>
 
               <p>
                   <label>Your invite link</label>
@@ -2814,6 +2818,10 @@ add_action('user_register', function($user_id) {
 
             <div id="tab_withdraw" class="wsi-tab-content">
                 <h4>Withdraw</h4>
+                <?php $withdrawal_eligibility = wsi_withdrawal_eligibility($uid, $balance_snapshot); ?>
+                <?php if (is_wp_error($withdrawal_eligibility)) : ?>
+                    <p role="status"><?php echo esc_html($withdrawal_eligibility->get_error_message()); ?></p>
+                <?php endif; ?>
                 <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
                     <input type="hidden" name="action" value="wsi_submit_withdraw">
                     <?php wp_nonce_field('wsi_withdraw_nonce'); ?>
@@ -4726,8 +4734,11 @@ function wsi_apply_referral($user_id, $amount, $deposit_id = 0) {
         $profit = $balances['available_balance'];
         $available = $balances['available_balance'];
         $net = $assets + $profit;
+        $eligibility = wsi_withdrawal_eligibility($uid, $balances);
 
         return [
+            'withdrawalEligible' => !is_wp_error($eligibility),
+            'withdrawalEligibilityMessage' => is_wp_error($eligibility) ? $eligibility->get_error_message() : '',
             'totalAssets' => round($assets, 2),
             'profit'      => round($profit, 2),
             'available'   => round($available, 2),

@@ -7,6 +7,7 @@ const scripts = [...page.matchAll(/<script>([\s\S]*?)<\/script>/g)];
 const code = scripts.at(-1)[1]
   .replace(/<\?php echo wp_json_encode\(\$available_balance\); \?>/g, '50')
   .replace(/<\?php echo wp_json_encode\(\$unlocked_assets\); \?>/g, '1000')
+  .replace(/<\?php echo wp_json_encode\(!is_wp_error\(\$withdrawal_eligibility\)\); \?>/g, 'true')
   .replace(/<\?php[\s\S]*?\?>/g, '/fixture');
 const controls = {};
 function control(id) {
@@ -28,11 +29,11 @@ const button = {disabled: false};
 source.querySelector = selector => selector.includes('total_assets') ? assetsOption : profitOption;
 form.querySelector = () => button;
 form.reportValidity = () => true;
-for (const id of ['wsi-withdraw-assets', 'wsi-withdraw-available', 'wsi-withdraw-lock', 'wsi-withdraw-lock-message']) control(id);
+for (const id of ['wsi-withdraw-assets', 'wsi-withdraw-available', 'wsi-withdraw-lock', 'wsi-withdraw-lock-message', 'wsi-withdraw-eligibility']) control(id);
 const timers = [];
 const requests = [];
 const alerts = [];
-let balance = {totalAssets: 1200, totalAssetsUnlockedAmount: 1000, totalAssetsLockedAmount: 200, available: 50, totalAssetsLocked: true, totalAssetsUnlockAt: '2027-01-01T00:00:00Z'};
+let balance = {withdrawalEligible: true, withdrawalEligibilityMessage: '', totalAssets: 1200, totalAssetsUnlockedAmount: 1000, totalAssetsLockedAmount: 200, available: 50, totalAssetsLocked: true, totalAssetsUnlockAt: '2027-01-01T00:00:00Z'};
 let resolveSubmission;
 const context = {
   document: {hidden: false, getElementById: id => controls[id], addEventListener(name, fn) { if (name === 'DOMContentLoaded') this.ready = fn; }},
@@ -95,5 +96,17 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
   resolveSubmission({ok: true, status: 200, text: async () => '0'});
   await flush();
   assert.match(alerts.at(-1), /session may have expired/);
+  balance = {...balance, withdrawalEligible: false, withdrawalEligibilityMessage: 'Invite someone who deposits.'};
+  timers[0]();
+  await flush();
+  assert.equal(button.disabled, true);
+  assert.equal(controls['wsi-withdraw-eligibility'].textContent, 'Invite someone who deposits.');
+  const before = requests.length;
+  form.events.submit({preventDefault() {}});
+  assert.equal(requests.length, before);
+  balance = {...balance, withdrawalEligible: true, withdrawalEligibilityMessage: ''};
+  timers[0]();
+  await flush();
+  assert.equal(button.disabled, false);
   console.log('PASS: lock/unlock refresh, account limits, source submission, repeat-click guard, and error recovery');
 })().catch(error => { console.error(error); process.exitCode = 1; });

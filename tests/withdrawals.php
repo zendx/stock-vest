@@ -32,7 +32,8 @@ function wp_timezone() { return new DateTimeZone('Africa/Lagos'); }
 function wp_date($format, $timestamp) { return (new DateTimeImmutable('@' . $timestamp))->setTimezone(wp_timezone())->format($format); }
 function current_time($type) { return wp_date('Y-m-d H:i:s', time()); }
 function get_current_user_id() { return 1; }
-function get_option($key, $default = false) { return $key === 'wsi_options' ? ['deposit_unlock_days' => $GLOBALS['unlock_days'] ?? 60] : ($key === 'date_format' ? 'Y-m-d' : $default); }
+function get_option($key, $default = false) { return $key === 'wsi_options' ? ['deposit_unlock_days' => $GLOBALS['unlock_days'] ?? 60] : ($key === 'date_format' ? 'Y-m-d' : ($GLOBALS['test_options'][$key] ?? $default)); }
+function add_option($key, $value, ...$args) { if (isset($GLOBALS['test_options'][$key])) return false; $GLOBALS['test_options'][$key] = $value; return true; }
 function wsi_log_tx(...$args) { $GLOBALS['logs'][] = $args; if (!empty($GLOBALS['test_notification_failure'])) { echo 'Unexpected mail output'; throw new RuntimeException('Mail unavailable'); } }
 function site_url($path) { return 'https://example.test' . $path; }
 function wsi_get_dashboard_page_url() { return site_url('/wsi/dashboard/'); }
@@ -157,9 +158,18 @@ function reset_fixture($main = 1000, $profit = 100, $holding = 50) {
     update_user_meta(1, 'wsi_profit_balance', $profit);
     $wpdb->insert('wp_wsi_holdings', ['id' => 1, 'user_id' => 1, 'accumulated_profit' => $holding, 'status' => 'open', 'created_at' => '2025-01-01 00:00:00']);
     $GLOBALS['unlock_days'] = 60;
+    update_user_meta(2, 'wsi_inviter_id', 1);
+    $wpdb->insert('wp_wsi_deposits', ['user_id' => 2, 'amount' => 50, 'status' => 'approved', 'payment_type' => 'bank']);
+    unset($GLOBALS['baseline_deposit']);
+    deposit(time() - 61 * DAY_IN_SECONDS);
+    $GLOBALS['baseline_deposit'] = $wpdb->insert_id;
 }
 function deposit($timestamp, $status = 'approved', $approved = true) {
     global $wpdb;
+    if (!empty($GLOBALS['baseline_deposit'])) {
+        $wpdb->query('DELETE FROM wp_wsi_deposits WHERE id=' . (int) $GLOBALS['baseline_deposit']);
+        unset($GLOBALS['baseline_deposit']);
+    }
     $date = wp_date('Y-m-d H:i:s', $timestamp);
     $wpdb->insert('wp_wsi_deposits', ['user_id' => 1, 'amount' => 1000, 'created_at' => $date, 'approved_at' => $approved ? $date : null, 'status' => $status]);
 }
@@ -168,7 +178,7 @@ function unchanged($main, $profit) { return wsi_get_main(1) === (float) $main &&
 
 try {
     $pdo->exec('CREATE TABLE wp_users (ID bigint PRIMARY KEY) ENGINE=InnoDB');
-    $pdo->exec('INSERT INTO wp_users VALUES (1)');
+    $pdo->exec('INSERT INTO wp_users VALUES (1), (2), (3)');
     $pdo->exec('CREATE TABLE wp_usermeta (umeta_id bigint AUTO_INCREMENT PRIMARY KEY, user_id bigint, meta_key varchar(100), meta_value varchar(100), KEY(user_id)) ENGINE=InnoDB');
     $pdo->exec('CREATE TABLE wp_wsi_holdings (id bigint PRIMARY KEY, user_id bigint, accumulated_profit decimal(14,2), status varchar(32), created_at datetime, KEY(user_id)) ENGINE=InnoDB');
     $pdo->exec('CREATE TABLE wp_wsi_deposits (id bigint AUTO_INCREMENT PRIMARY KEY, user_id bigint, amount decimal(14,2), amount_local decimal(14,2), payment_type varchar(20), crypto_wallet varchar(255), created_at datetime, approved_at datetime NULL, status varchar(32)) ENGINE=InnoDB');
@@ -189,8 +199,10 @@ try {
     $snapshot = wsi_get_withdrawal_balances(1);
     check($snapshot['total_assets_locked'] && abs(strtotime($snapshot['total_assets_unlock_at']) - (time() + 59 * DAY_IN_SECONDS)) <= 1, 'Lock deadline is a correct UTC instant for site-local dates');
     check(is_wp_error(request_money('50.00', 'total_assets')) && unchanged(1000, 150), 'Locked Total Assets cannot be withdrawn through a forged request');
+    check(request_money('125.00', 'available_balance')->code === 'wsi_locked' && unchanged(1000, 150), 'Available Balance is blocked before the unlock period');
+    deposit(time() - 61 * DAY_IN_SECONDS);
     $request = request_money('125.00', 'available_balance');
-    check(!is_wp_error($request) && unchanged(1000, 25), 'Available Balance remains withdrawable while assets are locked, including holding profit');
+    check(!is_wp_error($request) && unchanged(1000, 25), 'Available Balance is withdrawable after the unlock period');
     check(!is_wp_error(wsi_process_withdrawal_request($request['withdrawal_id'], 'decline')) && unchanged(1000, 150), 'Available Balance refund does not duplicate remaining holding profits');
     wsi_inc_profit(1, 10);
     check(unchanged(1000, 160), 'Profit credit adds only the new credit');
@@ -369,7 +381,7 @@ try {
     }
     foreach (['SELECT amount, created_at, approved_at', 'UPDATE wp_wsi_holdings', 'INSERT INTO wp_wsi_deposits'] as $failure) {
         $wpdb->fail = $failure;
-        check(is_wp_error(wsi_create_reinvestment(1, '1150.00')) && unchanged(1000, 150) && (int) $wpdb->get_var('SELECT COUNT(*) FROM wp_wsi_deposits') === 1, 'Failed reinvestment rolls back earnings, assets and deposit: ' . $failure);
+        check(is_wp_error(wsi_create_reinvestment(1, '1150.00')) && unchanged(1000, 150) && (int) $wpdb->get_var('SELECT COUNT(*) FROM wp_wsi_deposits WHERE user_id=1') === 1, 'Failed reinvestment rolls back earnings, assets and deposit: ' . $failure);
     }
     foreach ([['50.00', 1050, 100, 1000], ['115.00', 1115, 35, 1000], ['575.00', 1150, 0, 575]] as [$amount, $assets, $earnings, $unlocked]) {
         reset_fixture();
@@ -397,6 +409,42 @@ try {
     check(abs(strtotime(wsi_get_withdrawal_balances(1)['total_assets_unlock_at']) - (time() + 7 * DAY_IN_SECONDS)) <= 1, 'Reinvestment uses the configured lock duration');
     $GLOBALS['unlock_days'] = 0;
     check(wsi_get_withdrawal_balances(1)['total_assets_unlocked_amount'] === 1150.0, 'Zero-day configuration also applies to reinvestment');
+    reset_fixture();
+    $wpdb->query('DELETE FROM wp_usermeta WHERE user_id=2');
+    $wpdb->query('DELETE FROM wp_wsi_deposits WHERE user_id=2');
+    check(request_money('10', 'available_balance')->code === 'wsi_referral_required' && unchanged(1000, 150), 'Matured new inviter without funded referrals cannot withdraw');
+    update_user_meta(2, 'wsi_referred_by', 1);
+    $wpdb->fail = 'SELECT dep.id FROM';
+    check(request_money('10', 'available_balance')->code === 'wsi_storage' && unchanged(1000, 150), 'Referral lookup errors block withdrawals without changing balances');
+    check(request_money('10', 'total_assets')->code === 'wsi_referral_required', 'An invitation alone does not qualify a new inviter');
+    $wpdb->insert('wp_wsi_deposits', ['user_id' => 2, 'amount' => 50, 'status' => 'pending', 'payment_type' => 'bank']);
+    $ref_deposit = $wpdb->insert_id;
+    foreach (['pending', 'declined'] as $status) {
+        $wpdb->update('wp_wsi_deposits', ['status' => $status], ['id' => $ref_deposit]);
+        check(request_money('10', 'available_balance')->code === 'wsi_referral_required', 'Referral ' . $status . ' deposit does not qualify');
+    }
+    $wpdb->update('wp_wsi_deposits', ['status' => 'approved', 'payment_type' => 'reinvest'], ['id' => $ref_deposit]);
+    check(request_money('10', 'available_balance')->code === 'wsi_referral_required', 'Reinvestment does not qualify as a referral deposit');
+    $wpdb->update('wp_wsi_deposits', ['payment_type' => 'bank', 'amount' => 0], ['id' => $ref_deposit]);
+    check(request_money('10', 'available_balance')->code === 'wsi_referral_required', 'Zero-value referral deposit does not qualify');
+    $wpdb->update('wp_wsi_deposits', ['amount' => 50], ['id' => $ref_deposit]);
+    check(!is_wp_error(request_money('10', 'available_balance')), 'Legacy referral with approved deposit qualifies');
+    $wpdb->query("DELETE FROM wp_usermeta WHERE user_id=2");
+    update_user_meta(2, 'wsi_inviter_id', 1);
+    check(!is_wp_error(request_money('10', 'total_assets')), 'Canonical referral with approved deposit qualifies');
+    $wpdb->query("DELETE FROM wp_usermeta WHERE user_id=2");
+    update_user_meta(1, 'wsi_inviter_id', 1);
+    check(request_money('10', 'available_balance')->code === 'wsi_referral_required', 'Self-referral cannot qualify');
+    update_user_meta(2, 'wsi_referred_by', 1);
+    $wpdb->query('DELETE FROM wp_wsi_deposits WHERE user_id=2');
+    $GLOBALS['test_options']['wsi_withdrawal_existing_inviters_v1'] = [1];
+    foreach (['available_balance', 'total_assets'] as $source) {
+        check(request_money('10', $source)->code === 'wsi_referral_required', 'Old exemption cannot bypass approved referral deposit requirement: ' . $source);
+    }
+    reset_fixture();
+    check(!is_wp_error(request_money('10', 'available_balance')), 'Existing funded referrals continue to qualify without another invitation');
+    $wpdb->query('DELETE FROM wp_wsi_deposits WHERE user_id=1');
+    check(request_money('10', 'available_balance')->code === 'wsi_locked', 'Funded referral does not bypass the investment unlock period');
     echo "All $count checks passed.\n";
 } finally {
     if ($pdo->inTransaction()) $pdo->rollBack();
